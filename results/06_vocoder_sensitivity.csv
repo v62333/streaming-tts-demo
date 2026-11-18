@@ -1,0 +1,6 @@
+case,fp32_layers,WER_%,mel_dist_vs_fp32voc,size_MB
+keep_none,0,82.0,1.719,24
+keep_first1,1,83.0,1.663,24
+keep_last1,1,82.0,1.709,27
+keep_last2_head,2,1.0,1.525,36
+keep_first1_last2,3,0.0,1.202,36

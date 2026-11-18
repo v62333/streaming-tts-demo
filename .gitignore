@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# 模型權重不重新散布（OpenRAIL-M），照 README 用 hf download 取得；INT8 由 scripts/04_quantize.py 產生
+models/
+# 中間產物
+results/*.log
+results/03_smoke.csv
+results/01_full_*.wav
+# 試聽樣本只留同一句的四個版本
+results/05_wavs/*
+!results/05_wavs/fp32_s8_3.wav
+!results/05_wavs/int8ve_s8_3.wav
+!results/05_wavs/int8all_s8_3.wav
+!results/05_wavs/fp32_s2_3.wav
