@@ -1,0 +1,10 @@
+config,audio_s,first_new_len_s,first_s,load_s,mel_vs_cpu,steady_s,ve_s,voc_s
+cpu_fp32,6.35,1.75,2.19,{},0.0,1.87,1.812,0.042
+cpu_int8ve,6.35,0.46,0.4,{},0.435,0.482,0.434,0.042
+ve_nn_all,6.35,1.64,1.86,{'vector_estimator': 3.14},0.0,1.602,1.529,0.048
+ve_nn_gpu,6.35,1.7,1.6,{'vector_estimator': 1.17},0.0,1.531,1.591,0.044
+ve_nn_ane,6.35,1.05,1.07,{'vector_estimator': 2.78},0.0,0.955,1.064,0.045
+voc_mlprogram,6.35,2.09,2.1,{'vocoder': 1.11},0.0,2.019,1.863,0.142
+voc_nn,6.35,2.13,2.1,{'vocoder': 0.97},0.0,2.171,1.992,0.168
+all4_nn,6.35,2.21,2.72,"{'duration_predictor': 0.53, 'text_encoder': 0.8, 'vector_estimator': 2.96, 'vocoder': 0.98}",0.002,2.043,1.938,0.17
+int8ve_on_coreml,6.35,1.59,1.82,{'vector_estimator': 1.33},0.391,1.628,1.573,0.045

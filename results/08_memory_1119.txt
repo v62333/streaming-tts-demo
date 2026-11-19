@@ -1,0 +1,2 @@
+fp32 [{'after_load_MB': 444, 'peak_rss_MB': 558}, {'after_load_MB': 446, 'peak_rss_MB': 559}, {'after_load_MB': 443, 'peak_rss_MB': 557}]
+int8ve [{'after_load_MB': 266, 'peak_rss_MB': 376}, {'after_load_MB': 264, 'peak_rss_MB': 375}, {'after_load_MB': 263, 'peak_rss_MB': 374}]

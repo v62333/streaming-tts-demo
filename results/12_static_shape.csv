@@ -1,0 +1,6 @@
+config,load_s,ve_s_median,mel_vs_ref_mean,wer_pct,error
+cpu_dynamic(ref),,0.926,0.0,0.0,
+cpu_padded,0.14,1.962,1.23,0.0,
+mlprogram_all,8.41,0.277,1.23,0.0,
+mlprogram_ane,6.03,0.313,1.23,0.0,
+mlprogram_gpu,6.56,0.28,1.23,0.0,

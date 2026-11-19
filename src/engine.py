@@ -31,8 +31,12 @@ class Plan:
 
 class Engine:
     def __init__(self, onnx_dir: str = ONNX_DIR, voice: str = "M1",
-                 threads: int = 0, providers=None, model_overrides: dict | None = None):
+                 threads: int = 0, providers=None, model_overrides: dict | None = None,
+                 session_config: dict | None = None):
         opts = ort.SessionOptions()
+        # 推論引擎設定（記憶體池、圖優化等級…），名稱同 ort.SessionOptions 的屬性
+        for k, v in (session_config or {}).items():
+            setattr(opts, k, v)
         if threads:
             opts.intra_op_num_threads = threads
             opts.inter_op_num_threads = 1
@@ -40,8 +44,12 @@ class Engine:
         paths = {k: os.path.join(onnx_dir, f"{k}.onnx") for k in
                  ("duration_predictor", "text_encoder", "vector_estimator", "vocoder")}
         paths.update(model_overrides or {})
-        self.sess = {k: ort.InferenceSession(p, sess_options=opts, providers=providers)
-                     for k, p in paths.items()}
+        self.load_s = {}
+        self.sess = {}
+        for k, p in paths.items():
+            t0 = time.perf_counter()
+            self.sess[k] = ort.InferenceSession(p, sess_options=opts, providers=providers)
+            self.load_s[k] = time.perf_counter() - t0
         self.cfgs = H.load_cfgs(onnx_dir)
         self.tp = H.load_text_processor(onnx_dir)
         self.style = H.load_voice_style([os.path.join(VOICE_DIR, f"{voice}.json")])
