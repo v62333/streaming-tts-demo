@@ -1,6 +1,14 @@
 # Streaming TTS Deployment Demo
 
-把一個公開的語音合成模型（Supertonic-3，ONNX）做成「邊生成邊播放」的串流服務，並在 CPU 上做 INT8 量化、資源受限測試、客觀品質把關。
+把一個公開的語音合成模型（Supertonic-3，ONNX）從「整句生成的研究原型」做成可上線的形態：逐句串流、INT8 量化、延遲與記憶體調校、雲端容器服務與壓測，以及每次推程式碼都會自動跑的發版品質關卡。
+
+| 產品化環節 | 這個 repo 裡的證據 |
+|---|---|
+| 模型整合 | `src/engine.py` 把官方整句流程拆成五個可分開計時、可替換的階段；`src/streamer.py` 接上逐句串流與環形緩衝 |
+| 推論最佳化 | INT8 動態量化：逐步生成快 2.6～3.3 倍；逐層定位出聲碼器不能量化的輸出頭 |
+| 延遲與記憶體調校 | 首段延遲 2.45 → 0.90 s（逐句）；記憶體 495 → 353 MB；預填量、步數、執行緒的取捨都有量測 |
+| 嵌入式／雲端部署 | 雲端：`service/` 容器化串流 API＋排隊上限＋過載拒絕，壓測 1～12 人；嵌入式：只做到 CPU 配額模擬（見範圍說明） |
+| 發版品質把關 | `scripts/release_gate.py`＋GitHub Actions：錯字率、音色偏離、速度、記憶體、首段延遲、斷音，任一不過就擋下 |
 
 **範圍說明（先講清楚）**
 - 模型不是自己訓練的，用的是官方預訓練權重；本專案做的是**部署端**：拆流程、串流、量化、量測。
@@ -24,7 +32,9 @@
 
 ## Demo 網頁與影片
 
-▶ [demo 影片 results/video/streaming_tts_demo.mp4](results/video/streaming_tts_demo.mp4)（68 秒）：FP32 同一段文字「整句做完才播 vs 逐句串流」對照，接著 INT8 逐句串流。
+▶ [demo 影片 results/video/streaming_tts_demo.mp4](results/video/streaming_tts_demo.mp4)（68 秒）：FP32 同一段文字「整句做完才播 vs 逐句串流」對照，接著 INT8 逐句串流。（影片錄於加入暫停／停止與速度、記憶體欄位之前。）
+
+網頁可以：自選模式／模型／步數、對照「整句 vs 逐句」、**暫停／繼續**（暫停時生成照跑，緩衝會被填滿到上限＝畫面上直接看得到背壓；暫停時間不算斷音）、**停止**；每次播放顯示首段延遲、斷音、生成速度與峰值記憶體（記憶體取實驗 8 的獨立行程實測值，因為網頁伺服器同時載入兩套模型，無法現場分開量）。
 
 - **聲音是那一次真正播出去的聲音**：播放核心把每個送給喇叭的區塊連同時間戳記下來，再依畫面上「綠色播放條第一次出現」的那一格自動對齊（`ui/mux_video.py`），不是事後配音。
 - **畫面上每個點都是同一次播放回報的事件**：每段生成開始／完成、開口、斷音、緩衝水位（每 50 ms）。
@@ -99,6 +109,52 @@ PW=<playwright 模組路徑> node ui/record_demo.cjs   # 自動操作網頁並�
 
 **這裡的「斷音」是什麼**：因為一整句生成完才寫入，斷音只發生在**句子之間**——句間停頓被拉長，不會在字中間卡掉。
 
+## 發版品質關卡（每次推程式碼自動跑）
+
+`scripts/release_gate.py <候選版本>`：候選版本定義在 `configs/release_candidates.json`，門檻在 `configs/gate_thresholds.json`。
+**每一項都跟同一台機器上現場量的 baseline 比**，所以同一份門檻在 Mac 和 GitHub 的 x86 機器上都能用。任一項不過 → 結束碼 1 → CI 紅燈。
+
+| 檢查 | 門檻 |
+|---|---|
+| 錄音辨識錯字率（whisper 轉回文字） | ≤ 5%，且比 baseline 增加 ≤ 2 個百分點 |
+| 頻譜偏離（同隨機種子對 baseline） | ≤「baseline 只換隨機種子」的自然變化量 |
+| 生成速度 | 不得比 baseline 慢 |
+| 峰值記憶體（獨立行程） | ≤ baseline × 1.05 |
+| 串流首段延遲 p50 | ≤ baseline × 1.10 |
+| 串流斷音 | 0 次 |
+
+Mac 上實測（`results/gate/*.md`）：
+
+| 候選 | 結果 | 關鍵數字 |
+|---|---|---|
+| `int8_ve`（只量化逐步生成） | ✅ 准許發版 | 7 項全過，速度 3.25×，錯字率 0% |
+| `int8_all`（連聲碼器一起量化） | ❌ 擋下 | 錯字率 82%（每句都被聽成 "Thank you."） |
+| `fp32_s2`（只用 2 步） | ❌ 擋下 | 錯字率 27%（"Turn left." → "Or at last."） |
+
+**兩個被擋下的版本都比較快、記憶體也比較少**——只看速度會選它們上線，是品質關卡把它們攔下來。
+GitHub Actions（`.github/workflows/release-gate.yml`）同時檢查兩件事：`int8_ve` 必須通過、`int8_all` **必須被擋下**——證明關卡不是永遠綠燈。
+
+## 雲端服務與壓測
+
+`service/tts_service.py`（容器：`docker/Dockerfile.service`，模型以唯讀方式掛載、不打包進映像）：
+- `POST /v1/tts` 逐句串流回傳 16-bit PCM（HTTP chunked），每生成完一句就送出
+- `MAX_CONCURRENT`：同時最多幾個請求在生成，其餘排隊；`MAX_QUEUE`：排隊上限，超過直接回 503（卸載，保護已在服務中的人）
+- `/healthz`（模型載入完成才就緒，接容器健康檢查）、`/metrics`（請求數、進行中、排隊、被拒、首段延遲 p50/p95）
+
+壓測（`scripts/run_loadtest.sh`）：同一個容器資源（`--cpus=4 --memory=2g`），比較兩種設定；客戶端各自模擬喇叭播放，算每個人的首段延遲與斷音。
+
+![雲端壓測](results/charts/6_cloud_loadtest.png)
+
+| 同時人數 | A：最多 2 個同時生成（各 2 執行緒）＋排隊 | B：最多 8 個同時生成（各 1 執行緒） |
+|---|---|---|
+| 1 | 首段 0.36～0.45 s | 0.63～0.82 s（每人只分到 1 條執行緒） |
+| 4 | 中位數 1.4 s，**0 人斷音** | 1.1～1.3 s，1 人斷音 |
+| 8 | 中位數 3.4～3.5 s（最慢 6.4～6.9 s），**0 人斷音** | 3.0 s，**8 人中 5 人斷音**（最長 3 s） |
+| 12 | **2 人被拒（503）**，其餘 0 斷音 | 不拒絕，但 7～8 人斷音，最慢 10.5 s 才開口 |
+
+**取捨**：A 讓後來的人等久一點、滿了就明說「忙線」，但一旦開始講就不會斷；B 讓所有人都「開始了」，但大家一起變卡。對語音來說，講到一半卡住比晚一點開口更糟，所以選 A；`MAX_QUEUE` 的大小＝「願意讓人等多久」。
+**量測條件的限制**：這組壓測進行時，同一台 Mac 上另有 Android 模擬器與其他程式在跑（系統負載約 7），A、B 在同樣條件下比較所以相對結論成立，但絕對秒數可能偏慢；壓測跑在 Mac 上的 Linux 虛擬機，不等於雲端主機。
+
 ## 踩到的坑（都是實際發生、有數字的）
 
 1. **先規劃後量測，規劃錯了。** 原本要「只切聲碼器」，量了才知道它只佔 3%；改成逐句管線。
@@ -117,18 +173,23 @@ PW=<playwright 模組路徑> node ui/record_demo.cjs   # 自動操作網頁並�
 4. **步數有懸崖。** 8→4 步品質幾乎不變，4→2 步 WER 跳到 27%（"Turn left." 變 "Or at last."）。
 5. **預填量在逐句串流下幫助有限。** 寫入是一次一整句，所以 0.2 s 和 1.0 s 幾乎沒差（第一句一寫進來就超過門檻）；拉到 2.0 s 斷音次數減半，但首段延遲多 0.8 s。**真正解決斷音的是讓生成變快（INT8），不是加大緩衝。**
 6. **原生環境測不出問題。** M4 單核都不斷音，要用 Docker 壓 CPU 配額才看得到斷音與預填的取捨。
+7. **最快的版本往往是壞的。** 發版關卡裡兩個被擋下的版本，速度和記憶體都比通過的那個好；沒有品質檢查，只看效能數字一定會選錯。
+8. **量測腳本自己的 bug 會產出整批假數據。** 第一次壓測用 zsh 迴圈傳設定，`set -- $cfg` 在 zsh 不會拆字，伺服器拿到空的設定、每個請求都失敗；整批作廢，改成 bash 腳本並在每組開跑前印出容器實際設定再量。
+9. **背景程式會污染量測。** 有一次錄影時 FP32 整句開口 9.27 s（正常約 2.5～3 s），查出同時有 Android 模擬器在跑；那次影片不採用。量測前要先看系統負載。
 
 ## 沒做 / 下一步
 
 - TensorRT（需要 NVIDIA 顯卡）、靜態量化（需校正集）、FP16。
 - 句內更細的切段（例如逗號）對語調的代價，目前只量了延遲沒量品質。
 - 長時間播放的穩定性（只測了 8～15 秒的段落）。
+- 雲端：沒有部署到真正的雲端主機、沒有自動擴縮；壓測只到 12 人、每組 2 次。
+- 句內串流（一句還沒生成完就先播）：這個模型的逐步生成要看整句，做不到，只能換模型或改架構。
 - 真實車用晶片：Docker 配額只能模擬 CPU 份量，模擬不了記憶體頻寬、NPU、DMA 等硬體差異。
 
 ## 重現
 
 ```bash
-uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python onnxruntime numpy soundfile sounddevice huggingface_hub psutil onnx faster-whisper librosa num2words pytest
+uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python -r requirements.txt
 .venv/bin/hf download Supertone/supertonic-3 --include 'onnx/*' --include 'voice_styles/*' --include LICENSE --local-dir models/supertonic-3
 .venv/bin/python -m pytest -q tests                 # 環形緩衝測試
 .venv/bin/python scripts/01_stage_profile.py        # 各階段耗時
@@ -139,6 +200,9 @@ uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python onnxruntime numpy so
 docker build -t stts-bench docker && docker run --rm --cpus=1 -v "$PWD":/work stts-bench \
   python scripts/03_streaming_bench.py --threads 1 --steps 8 --policies sentence --prefills 0.2 1.0 2.0 --variant int8ve
 .venv/bin/python scripts/demo_live.py               # 真實播放＋水位顯示
+.venv/bin/python scripts/release_gate.py int8_ve    # 發版關卡（int8_all / fp32_s2 會被擋下）
+docker build -f docker/Dockerfile.service -t stts-service . && bash scripts/run_loadtest.sh   # 雲端服務壓測
+.venv/bin/python scripts/09_charts.py               # 重畫所有圖
 ```
 
 ## 授權

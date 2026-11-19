@@ -48,7 +48,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.evaluate(() => window.scrollTo({ top: 330, behavior: "smooth" }));
   await sleep(3000);
 
-  // 場景 2：INT8 逐句串流
+  // 場景 2：INT8 逐句串流，中途暫停 3 秒（看緩衝被填滿＝背壓），再繼續
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   await sleep(1000);
   await click('#variant button[data-v="int8"]');
@@ -56,8 +56,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click("#play");
   await sleep(1200);
   await page.evaluate(() => window.scrollTo({ top: 230, behavior: "smooth" }));
-  await waitIdle();
   await sleep(2500);
+  await page.click("#pause");
+  await sleep(3500);
+  await page.click("#pause");          // 繼續
+  await waitIdle();
+  await sleep(3000);
 
   const video = page.video();
   await ctx.close();

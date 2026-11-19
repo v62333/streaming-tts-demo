@@ -1,0 +1,9 @@
+{
+  "_說明": "每個候選版本＝步數＋要替換的 ONNX。baseline 是比較基準（同一台機器上現場量）。",
+  "baseline":       {"steps": 8, "overrides": {}},
+  "int8_ve":        {"steps": 8, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}},
+  "int8_ve_s4":     {"steps": 4, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}},
+  "int8_all":       {"steps": 8, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx",
+                                               "vocoder": "models/int8/vocoder.int8.onnx"}},
+  "fp32_s2":        {"steps": 2, "overrides": {}}
+}

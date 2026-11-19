@@ -165,3 +165,44 @@ fig.suptitle("只剩 1 顆 CPU 時：加大預填只少一半斷音還更慢開�
              x=0.01, ha="left", fontsize=13, fontweight="bold", color=INK)
 fig.tight_layout(rect=(0, 0.0, 1, 0.95))
 save(fig, "5_cpu_limited", "Docker --cpus=1（Mac 上的 Linux 虛擬機，非真實車用晶片）、單執行緒、8 步、逐句串流｜資料：results/07_docker_cpu1_*.csv")
+
+# ---------- 圖 6：雲端服務壓測（兩種伺服器設定） ----------
+if os.path.exists("results/09_loadtest.csv"):
+    rows = read("results/09_loadtest.csv")
+    tags = []
+    for r in rows:
+        if r["tag"] not in tags:
+            tags.append(r["tag"])
+    style = {0: (BLUE, "o", "-"), 1: (ORANGE, "s", "--")}
+    names = {"cpus4_mc2_t2": "A：最多 2 個同時生成（各 2 執行緒）＋排隊",
+             "cpus4_mc8_t1": "B：最多 8 個同時生成（各 1 執行緒）"}
+    fig, axs = plt.subplots(1, 3, figsize=(13, 4))
+    for k, tag in enumerate(tags):
+        col, mk, ls = style[k % 2]
+        g = defaultdict(list)
+        for r in rows:
+            if r["tag"] == tag:
+                g[int(r["users"])].append(r)
+        us = sorted(g)
+        med = lambda key: [S.median(float(x[key]) for x in g[u] if x[key] not in ("", "None")) for u in us]  # noqa: E731
+        lab = names.get(tag, tag)
+        axs[0].plot(us, med("ttfa_p50_s"), color=col, marker=mk, ls=ls, lw=2, markersize=7, label=lab)
+        axs[1].plot(us, med("ttfa_max_s"), color=col, marker=mk, ls=ls, lw=2, markersize=7, label=lab)
+        stall_users = [S.median(int(x["users_with_stall"]) for x in g[u]) for u in us]
+        rej = [S.median(int(x["rejected_503"]) for x in g[u]) for u in us]
+        axs[2].plot(us, stall_users, color=col, marker=mk, ls=ls, lw=2, markersize=7, label=f"{lab[:1]}：有斷音的人數")
+        if any(rej):
+            axs[2].plot(us, rej, color=col, marker="x", ls=":", lw=1.5, markersize=8, label=f"{lab[:1]}：被拒（503）人數")
+    for a_, t_, y_ in [(axs[0], "首段延遲 中位數", "秒"), (axs[1], "首段延遲 最慢的那個人", "秒"),
+                       (axs[2], "有斷音的人數／被拒人數", "人")]:
+        a_.set_title(t_)
+        a_.set_xlabel("同時使用人數")
+        a_.set_ylabel(y_)
+        a_.set_xticks(sorted({int(r["users"]) for r in rows}))
+        a_.set_ylim(0, None)
+    axs[0].legend(frameon=False, fontsize=8.5, loc="upper left")
+    axs[2].legend(frameon=False, fontsize=8, loc="upper left")
+    fig.suptitle("同樣 4 顆 CPU：排隊（A）開口較晚但沒有人斷音、滿了就拒絕；一起分（B）8 人時 5 人斷音",
+                 x=0.01, ha="left", fontsize=13, fontweight="bold", color=INK)
+    fig.tight_layout(rect=(0, 0.0, 1, 0.94))
+    save(fig, "6_cloud_loadtest", "Docker --cpus=4 --memory=2g（Mac 上的 Linux 虛擬機）、INT8、8 步、逐句串流、排隊上限 8（超過回 503，被拒的人不計入延遲）｜每點＝2 次的中位數｜資料：results/09_loadtest.csv")

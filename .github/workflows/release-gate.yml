@@ -1,0 +1,61 @@
+# 每次推程式碼：單元測試 → 下載模型 → 量化 → 發版關卡
+#   int8_ve  必須「通過」
+#   int8_all 必須「被擋下」（證明關卡真的會擋壞版本，不是永遠綠燈）
+name: release-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install numpy==2.5.5 pytest==9.2.0
+      - run: python -m pytest -q tests
+
+  release-gate:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libportaudio2 libsndfile1
+      - run: pip install -r requirements.txt
+      - name: 快取模型與 whisper
+        uses: actions/cache@v4
+        with:
+          path: |
+            models/supertonic-3
+            ~/.cache/huggingface
+          key: models-supertonic3-whisper-small-en-v1
+      - name: 下載官方模型（不放進 repo）
+        run: |
+          test -f models/supertonic-3/onnx/vocoder.onnx || \
+          hf download Supertone/supertonic-3 --include 'onnx/*' --include 'voice_styles/*' --include LICENSE --local-dir models/supertonic-3
+      - name: INT8 量化
+        run: python scripts/04_quantize.py
+      - name: 關卡 int8_ve（必須通過）
+        run: python scripts/release_gate.py int8_ve
+      - name: 關卡 int8_all（必須被擋下）
+        run: |
+          if python scripts/release_gate.py int8_all; then
+            echo "::error::int8_all 應該被擋下卻放行了，關卡失效"; exit 1
+          else
+            echo "int8_all 被正確擋下"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-reports
+          path: results/gate/

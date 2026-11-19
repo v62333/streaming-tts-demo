@@ -1,0 +1,97 @@
+{
+  "candidate": "int8_all",
+  "config": {
+    "steps": 8,
+    "overrides": {
+      "vector_estimator": "models/int8/vector_estimator.int8.onnx",
+      "vocoder": "models/int8/vocoder.int8.onnx"
+    }
+  },
+  "passed": false,
+  "checks": [
+    {
+      "item": "錄音辨識錯字率",
+      "value": 82.0,
+      "limit": "≤ 5.0",
+      "unit": "%",
+      "pass": false
+    },
+    {
+      "item": "錯字率比 baseline 增加",
+      "value": 82.0,
+      "limit": "≤ 2.0",
+      "unit": "pt",
+      "pass": false
+    },
+    {
+      "item": "頻譜偏離（vs baseline）",
+      "value": 1.771,
+      "limit": "≤ 1.525（自然變化量）",
+      "unit": "",
+      "pass": false
+    },
+    {
+      "item": "生成速度 RTF",
+      "value": 0.14,
+      "limit": "≤ 0.482（baseline）",
+      "unit": "×",
+      "pass": true
+    },
+    {
+      "item": "峰值記憶體",
+      "value": 254,
+      "limit": "≤ 573",
+      "unit": "MB",
+      "pass": true
+    },
+    {
+      "item": "串流首段延遲 p50",
+      "value": 0.241,
+      "limit": "≤ 1.687",
+      "unit": "s",
+      "pass": true
+    },
+    {
+      "item": "串流斷音",
+      "value": 0,
+      "limit": "≤ 0",
+      "unit": "次",
+      "pass": true
+    }
+  ],
+  "baseline": {
+    "wer_pct": 0.0,
+    "rtf": 0.482,
+    "peak_mb": 546,
+    "first_audio_p50_s": 1.534
+  },
+  "speedup_vs_baseline": 3.44,
+  "misheard": [
+    {
+      "ref": "Turn left.",
+      "heard": "Thank you."
+    },
+    {
+      "ref": "In two hundred meters, turn right onto Main Street.",
+      "heard": "Thank you."
+    },
+    {
+      "ref": "Your battery is at twenty percent.",
+      "heard": "Thank you."
+    },
+    {
+      "ref": "The nearest charging station is four kilometers ahead, on the right side of the highway.",
+      "heard": "Thank you."
+    },
+    {
+      "ref": "Traffic is heavy on the route ahead, so I found a faster way that saves about twelve minutes.",
+      "heard": "Thank you."
+    }
+  ],
+  "machine": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.14",
+    "cpu_count": 10
+  },
+  "elapsed_s": 168.6
+}

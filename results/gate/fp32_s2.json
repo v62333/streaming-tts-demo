@@ -1,0 +1,94 @@
+{
+  "candidate": "fp32_s2",
+  "config": {
+    "steps": 2,
+    "overrides": {}
+  },
+  "passed": false,
+  "checks": [
+    {
+      "item": "錄音辨識錯字率",
+      "value": 27.0,
+      "limit": "≤ 5.0",
+      "unit": "%",
+      "pass": false
+    },
+    {
+      "item": "錯字率比 baseline 增加",
+      "value": 27.0,
+      "limit": "≤ 2.0",
+      "unit": "pt",
+      "pass": false
+    },
+    {
+      "item": "頻譜偏離（vs baseline）",
+      "value": 2.221,
+      "limit": "≤ 1.525（自然變化量）",
+      "unit": "",
+      "pass": false
+    },
+    {
+      "item": "生成速度 RTF",
+      "value": 0.119,
+      "limit": "≤ 0.453（baseline）",
+      "unit": "×",
+      "pass": true
+    },
+    {
+      "item": "峰值記憶體",
+      "value": 547,
+      "limit": "≤ 574",
+      "unit": "MB",
+      "pass": true
+    },
+    {
+      "item": "串流首段延遲 p50",
+      "value": 0.238,
+      "limit": "≤ 1.777",
+      "unit": "s",
+      "pass": true
+    },
+    {
+      "item": "串流斷音",
+      "value": 0,
+      "limit": "≤ 0",
+      "unit": "次",
+      "pass": true
+    }
+  ],
+  "baseline": {
+    "wer_pct": 0.0,
+    "rtf": 0.453,
+    "peak_mb": 547,
+    "first_audio_p50_s": 1.615
+  },
+  "speedup_vs_baseline": 3.81,
+  "misheard": [
+    {
+      "ref": "Turn left.",
+      "heard": "Or at last."
+    },
+    {
+      "ref": "In two hundred meters, turn right onto Main Street.",
+      "heard": "In 200 meters, turn right onto male screen."
+    },
+    {
+      "ref": "Traffic is heavy on the route ahead, so I found a faster way that saves about twelve minutes.",
+      "heard": "Traffic is heavy on the route ahead, so I have a faster way that fades about 12 minutes."
+    },
+    {
+      "ref": "Would you like me to switch to the new route, or keep the current one?",
+      "heard": "Would you like me to switch to the new thing, or keep the time?"
+    },
+    {
+      "ref": "New message from Anna. She says she is running late.",
+      "heard": "I have a message from Anna, she says she is running right."
+    }
+  ],
+  "machine": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.14",
+    "cpu_count": 10
+  },
+  "elapsed_s": 159.9
+}

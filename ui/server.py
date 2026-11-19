@@ -31,6 +31,22 @@ from streamer import Control, stream  # noqa: E402
 
 INT8 = {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}
 ENGINES: dict = {}
+
+
+def load_mem_ref():
+    """讀實驗 8 的實測峰值記憶體（每個模型在獨立行程量；伺服器同時載兩套，無法現場分開量）。"""
+    import ast
+    ref = {}
+    try:
+        for line in open(os.path.join(ROOT, "results", "08_memory.txt")):
+            k, v = line.split(" ", 1)
+            ref[{"int8ve": "int8"}.get(k, k)] = int(np.median([d["peak_rss_MB"] for d in ast.literal_eval(v)]))
+    except (OSError, ValueError):
+        pass
+    return ref
+
+
+MEM_REF = load_mem_ref()
 ENGINE_LOCK = threading.Lock()
 RUN_LOCK = threading.Lock()        # 一次只跑一個，避免兩次量測互搶 CPU
 RUNS: dict = {}                    # run_id -> {"q": Queue, "events": [], "audio": bytes|None}
@@ -75,7 +91,11 @@ def run_job(run_id: str, p: dict):
                 sf.write(buf, pcm, eng.sr, format="WAV")
                 r["audio"] = buf.getvalue()
                 r["audio_offset_s"] = t0
-            emit({"type": "done", "summary": st.summary()})
+            summ = st.summary()
+            gen, aud = sum(st.seg_gen_s), sum(st.seg_audio_s)
+            summ["rtf"] = round(gen / aud, 3) if aud else None
+            summ["mem_ref_mb"] = MEM_REF.get(p["variant"])
+            emit({"type": "done", "summary": summ})
         except Exception as ex:  # 讓畫面看得到錯誤，不要卡住
             emit({"type": "error", "message": repr(ex)})
         finally:

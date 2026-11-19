@@ -1,0 +1,10 @@
+{
+  "_說明": "門檻都是『相對同機器上的 baseline』，所以 Mac 和 GitHub 的 x86 機器可以用同一份。",
+  "wer_max_pct": 5.0,
+  "wer_max_delta_pct": 2.0,
+  "mel_dist_max_ratio_to_seed_noise": 1.0,
+  "rtf_max_ratio_to_baseline": 1.0,
+  "peak_mem_max_ratio_to_baseline": 1.05,
+  "first_audio_p50_max_ratio_to_baseline": 1.10,
+  "underruns_max": 0
+}

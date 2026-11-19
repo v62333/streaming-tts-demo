@@ -7,7 +7,6 @@
 """
 import csv
 import os
-import re
 import sys
 import time
 
@@ -15,19 +14,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from engine import Engine  # noqa: E402
-
-SENTS = [
-    "Turn left.",
-    "In two hundred meters, turn right onto Main Street.",
-    "Your battery is at twenty percent.",
-    "The nearest charging station is four kilometers ahead, on the right side of the highway.",
-    "Traffic is heavy on the route ahead, so I found a faster way that saves about twelve minutes.",
-    "Would you like me to switch to the new route, or keep the current one?",
-    "New message from Anna. She says she is running late.",
-    "The temperature outside is minus three degrees, and the road may be icy.",
-    "Calling Mom on her mobile phone.",
-    "Please take over the steering wheel.",
-]
+from quality import SENTS, logmel, norm, wer  # noqa: E402,F401
 
 VARIANTS = [  # 名稱, 步數, 覆寫的模型（seed 偏移：見 SEED_OFFSET）
     ("fp32_s8", 8, {}),
@@ -43,33 +30,6 @@ VARIANTS = [  # 名稱, 步數, 覆寫的模型（seed 偏移：見 SEED_OFFSET�
     ("int8all_s8", 8, {"vector_estimator": "models/int8/vector_estimator.int8.onnx",
                        "vocoder": "models/int8/vocoder.int8.onnx"}),
 ]
-
-
-def norm(s):
-    # 數字轉英文字（whisper 會把 two hundred 寫成 200，那不是念錯）
-    from num2words import num2words
-    s = s.replace("%", " percent").replace(" km ", " kilometers ")
-    s = re.sub(r"\d+", lambda m: " " + num2words(int(m.group())) + " ", s)
-    s = re.sub(r"[^a-z0-9' ]", " ", s.lower().replace("-", " "))
-    return s.split()
-
-
-def wer(ref, hyp):
-    r, h = norm(ref), norm(hyp)
-    d = np.zeros((len(r) + 1, len(h) + 1), dtype=int)
-    d[:, 0] = range(len(r) + 1)
-    d[0, :] = range(len(h) + 1)
-    for i in range(1, len(r) + 1):
-        for j in range(1, len(h) + 1):
-            d[i, j] = min(d[i - 1, j] + 1, d[i, j - 1] + 1,
-                          d[i - 1, j - 1] + (r[i - 1] != h[j - 1]))
-    return d[-1, -1], len(r)
-
-
-def logmel(wav, sr):
-    import librosa
-    m = librosa.feature.melspectrogram(y=wav, sr=sr, n_fft=2048, hop_length=512, n_mels=80)
-    return np.log(m + 1e-5)
 
 
 def main():
