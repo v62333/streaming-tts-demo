@@ -202,7 +202,7 @@ if os.path.exists("results/09_loadtest.csv"):
         a_.set_ylim(0, None)
     axs[0].legend(frameon=False, fontsize=8.5, loc="upper left")
     axs[2].legend(frameon=False, fontsize=8, loc="upper left")
-    fig.suptitle("同樣 4 顆 CPU：排隊（A）開口較晚但沒有人斷音、滿了就拒絕；一起分（B）8 人時 5 人斷音",
+    fig.suptitle("同樣 4 顆 CPU：排隊（A）開口較晚但沒有人斷音、滿了就拒絕；一起分（B）開口較快但 8 人起有人斷音",
                  x=0.01, ha="left", fontsize=13, fontweight="bold", color=INK)
     fig.tight_layout(rect=(0, 0.0, 1, 0.94))
     save(fig, "6_cloud_loadtest", "Docker --cpus=4 --memory=2g（Mac 上的 Linux 虛擬機）、INT8、8 步、逐句串流、排隊上限 8（超過回 503，被拒的人不計入延遲）｜每點＝2 次的中位數｜資料：results/09_loadtest.csv")
