@@ -1,0 +1,10 @@
+model,format,input_length,nodes_total,nodes_coreml,partitions,build_ok
+duration_predictor,MLProgram,dynamic,403,338,27,no
+duration_predictor,NeuralNetwork,dynamic,403,182,43,yes
+text_encoder,MLProgram,dynamic,700,596,39,no
+text_encoder,NeuralNetwork,dynamic,700,280,68,yes
+vector_estimator,MLProgram,dynamic,1004,918,38,no
+vector_estimator,NeuralNetwork,dynamic,1004,690,134,yes
+vocoder,MLProgram,dynamic,162,144,15,yes
+vocoder,NeuralNetwork,dynamic,162,120,35,yes
+vector_estimator,MLProgram,fixed_128x128,889,859,29,yes

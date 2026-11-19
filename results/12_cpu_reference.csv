@@ -1,0 +1,3 @@
+config,ve_s_median,ve_s_short_turn_left,ve_s_long_max
+int8_cpu,0.255,0.169,0.37
+fp32_cpu,0.945,0.448,1.442

@@ -66,6 +66,29 @@
     .opts { min-width: 0; }
     .stats { grid-template-columns: repeat(2, 1fr); }
   }
+
+  .exp-h { margin: 34px 2px 4px; font-size: 18px; }
+  .exp-sub { margin: 0 2px 12px; color: var(--ink2); font-size: 13px; }
+  .exp { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+  .exp .card h3 { margin: 0 0 4px; font-size: 15.5px; }
+  .exp .card .q { color: var(--ink2); font-size: 13px; margin-bottom: 10px; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { text-align: left; font-weight: 500; color: var(--ink3); font-size: 12px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  .tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .tbl tr.hl td { background: #f1f6fd; }
+  .tbl tr.pick td { background: #eef8f2; font-weight: 600; }
+  .bar { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+  .bar i { display: block; height: 8px; border-radius: 4px; background: var(--gen); }
+  .bar.mem i { background: var(--level); }
+  .bar.ok i { background: var(--play); }
+  .ok { color: var(--play); font-weight: 600; }
+  .ng { color: var(--bad); font-weight: 600; }
+  .take { margin-top: 10px; font-size: 13.5px; line-height: 1.6; }
+  .take li { margin-bottom: 2px; }
+  .live { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 4px 0 12px; }
+  .live .res { font-size: 13.5px; color: var(--ink2); }
+  .live .res b { color: var(--ink); }
+  .scroll { overflow-x: auto; }
 </style>
 </head>
 <body>
@@ -110,6 +133,41 @@
 
   <div class="status" id="status">選好設定後按「播放」。聲音從這台電腦的喇叭播出。</div>
   <div class="panels" id="panels"></div>
+
+
+  <h2 class="exp-h">其他實驗：冷啟動、記憶體設定、硬體加速器</h2>
+  <div class="exp-sub">下面三塊是<b>事先在 Apple M4（MacBook）上量好的結果</b>（讀 results/ 裡的結果檔，不是現場跑）；在別台電腦重跑 scripts/10～12 會覆寫結果檔，這裡就會顯示那台的數字。只有「現場量一次冷啟動」那顆按鈕是當場量。</div>
+  <div class="exp" id="exp">
+    <div class="card" id="exp-rt">
+      <h3>① 冷啟動與記憶體設定</h3>
+      <div class="q">車子發動後多久能講話？除了量化，推論引擎還有哪些設定能省記憶體？（INT8、長句，每個設定開新行程量 3 次取中位數）</div>
+      <div class="live"><button class="btn ghost" id="cold">▶ 現場量一次冷啟動</button><span class="res" id="coldres">開一個全新的行程，從零載入 INT8 的 4 個模型，再合成第一句 "Turn left."。</span></div>
+      <div class="scroll"><table class="tbl" id="t-rt"></table></div>
+      <ul class="take">
+        <li><b>冷啟動不是瓶頸</b>：4 個模型載入約 0.2 s，第一句跟之後一樣快。事先存優化後的模型只省 0.1 s。</li>
+        <li><b>圖優化要留著</b>：關掉後載入快一點，但每句慢 14%、記憶體反而多。</li>
+        <li><b>關掉「記憶體配置規劃」峰值少 7%</b>、速度差在雜訊內——每句話長度不同，照第一句預先排的緩衝區用不上。</li>
+        <li>記憶體絕對值隔天會差 10～15%（同機、同程式、同版本，原因未查證）；這裡只看同一批裡的比較。</li>
+      </ul>
+    </div>
+    <div class="card" id="exp-cm">
+      <h3>② 硬體加速器（Apple CoreML）：直接換上去</h3>
+      <div class="q">把模型交給加速器（GPU／神經網路引擎）會怎樣？跟 TensorRT、車用 NPU 是同一類問題。</div>
+      <div class="scroll"><table class="tbl" id="t-part"></table></div>
+      <div class="scroll" style="margin-top:12px"><table class="tbl" id="t-cm"></table></div>
+      <ul class="take">
+        <li><b>長度不固定 → MLProgram 格式 4 個模型有 3 個建不起來</b>（推算形狀時卷積輸出「太小」）。</li>
+        <li>較寬鬆的 NeuralNetwork 格式建得起來，但逐步生成被切成 134 塊，大多沒變快；聲碼器、INT8 模型交給加速器反而變慢。</li>
+        <li>「神經網路引擎」選項較快（另外交錯重跑 2 輪結論相同），但它和「GPU」選項的輸出數值完全一樣——<b>實際跑在哪顆晶片沒有證實</b>。</li>
+      </ul>
+    </div>
+    <div class="card" id="exp-st">
+      <h3>③ 固定輸入長度後再交給加速器</h3>
+      <div class="q">把逐步生成的輸入長度固定成 128（測試句最長 102），短的補零並用遮罩標出補的部分，跑完再裁回。10 句車用語句。</div>
+      <div class="scroll"><table class="tbl" id="t-st"></table></div>
+      <ul class="take" id="st-take"></ul>
+    </div>
+  </div>
 
   <footer>時間軸上的每個點都來自同一次播放回報的事件（生成開始／完成、開口、斷音、緩衝水位每 50 ms）。斷音＝播放時緩衝區沒有資料、只能補靜音。</footer>
 </div>
@@ -348,6 +406,71 @@ $("compare").onclick = async () => {
   }
   setBusy(false);
 };
+
+
+// ---------- 其他實驗（讀結果檔） ----------
+const RT_NAME = { fp32_default: "FP32 預設（參考）", default: "INT8 預設", no_graph_opt: "載入時不做圖優化",
+  preopt: "事先存好優化後的模型", no_arena: "關掉記憶體池", no_mem_pattern: "關掉記憶體配置規劃", lean: "兩個都關" };
+const M_NAME = { duration_predictor: "長度預測", text_encoder: "文字編碼", vector_estimator: "逐步生成", vocoder: "聲碼器" };
+const CM_NAME = { cpu_fp32: "全部 CPU（FP32）", cpu_int8ve: "全部 CPU（INT8）", ve_nn_all: "逐步生成 → CoreML（全部）",
+  ve_nn_gpu: "逐步生成 → CoreML（GPU）", ve_nn_ane: "逐步生成 → CoreML（神經網路引擎）", voc_mlprogram: "聲碼器 → CoreML（MLProgram）",
+  voc_nn: "聲碼器 → CoreML（NeuralNetwork）", all4_nn: "4 個模型都 → CoreML", int8ve_on_coreml: "INT8 逐步生成 → CoreML" };
+const ST_NAME = { "cpu_dynamic(ref)": "CPU FP32，不補齊（原版）", cpu_padded: "CPU FP32，補齊到 128",
+  mlprogram_all: "CoreML，補齊（全部）", mlprogram_ane: "CoreML，補齊（神經網路引擎）", mlprogram_gpu: "CoreML，補齊（GPU）" };
+const bar = (v, max, cls = "", txt = null) =>
+  `<div class="bar ${cls}"><i style="width:${Math.max(2, 110 * v / max)}px"></i><span>${txt ?? v}</span></div>`;
+const f2 = (x) => (+x).toFixed(2);
+
+async function loadExperiments() {
+  let d;
+  try { d = await (await fetch("/api/experiments")).json(); } catch (_) { return; }
+  // ① 冷啟動與記憶體
+  const rt = d.runtime, maxMem = Math.max(...rt.map((r) => r.peak_rss_MB)), maxS = Math.max(...rt.map((r) => r.steady_synth_s));
+  $("t-rt").innerHTML = `<tr><th>設定</th><th>載入</th><th>第一句</th><th>之後每句</th><th>峰值記憶體</th></tr>` +
+    rt.map((r) => `<tr class="${r.config === "no_mem_pattern" ? "pick" : r.config === "default" ? "hl" : ""}">
+      <td>${RT_NAME[r.config] ?? r.config}</td><td>${f2(r.load_s)} s</td><td>${f2(r.first_synth_s)} s</td>
+      <td>${bar(r.steady_synth_s, maxS, "", f2(r.steady_synth_s) + " s")}</td>
+      <td>${bar(r.peak_rss_MB, maxMem, "mem", Math.round(r.peak_rss_MB) + " MB")}</td></tr>`).join("");
+  // ② CoreML 直接換
+  $("t-part").innerHTML = `<tr><th>模型</th><th>格式</th><th>輸入長度</th><th>交給 CoreML 的運算</th><th>切成幾塊</th><th>建得起來？</th></tr>` +
+    d.partitions.map((r) => `<tr class="${r.input_length !== "dynamic" ? "pick" : ""}"><td>${M_NAME[r.model] ?? r.model}</td><td>${r.format}</td>
+      <td>${r.input_length === "dynamic" ? "不固定" : "固定 128"}</td>
+      <td>${bar(+r.nodes_coreml, +r.nodes_total, "ok", `${r.nodes_coreml} / ${r.nodes_total}`)}</td>
+      <td>${r.partitions}</td><td>${r.build_ok === "yes" ? '<span class="ok">✓</span>' : '<span class="ng">✗ 建不起來</span>'}</td></tr>`).join("");
+  const cm = d.coreml.filter((r) => r.steady_s), maxC = Math.max(...cm.map((r) => +r.steady_s));
+  $("t-cm").innerHTML = `<tr><th>交給 CoreML 的部分（長句，第 1 輪）</th><th>每句時間</th><th>其中逐步生成</th><th>聲碼器</th></tr>` +
+    cm.map((r) => `<tr class="${r.config === "cpu_int8ve" ? "hl" : ""}"><td>${CM_NAME[r.config] ?? r.config}</td>
+      <td>${bar(+r.steady_s, maxC, "", f2(r.steady_s) + " s")}</td><td>${f2(r.ve_s)} s</td><td>${f2(r.voc_s)} s</td></tr>`).join("");
+  // ③ 固定輸入長度
+  const ref = Object.fromEntries(d.cpu_ref.map((r) => [r.config, r]));
+  const st = d.static.filter((r) => r.ve_s_median);
+  const rows = [...st.map((r) => ({ name: ST_NAME[r.config] ?? r.config, ve: +r.ve_s_median, load: r.load_s ? f2(r.load_s) + " s" : "—",
+      wer: r.wer_pct + "%", mel: (+r.mel_vs_ref_mean).toFixed(2), cls: r.config === "mlprogram_all" ? "hl" : "" }))];
+  if (ref.int8_cpu) rows.push({ name: "CPU INT8，不補齊（目前選擇）", ve: +ref.int8_cpu.ve_s_median, load: "0.20 s",
+      wer: "0%", mel: "0.43", cls: "pick", note: `短句 ${f2(ref.int8_cpu.ve_s_short_turn_left)} s` });
+  const maxV = Math.max(...rows.map((r) => r.ve));
+  $("t-st").innerHTML = `<tr><th>設定</th><th>逐步生成時間（中位數）</th><th>載入</th><th>錯字率</th><th>與原版頻譜差</th></tr>` +
+    rows.map((r) => `<tr class="${r.cls}"><td>${r.name}</td><td>${bar(r.ve, maxV, "", f2(r.ve) + " s" + (r.note ? `（${r.note}）` : ""))}</td>
+      <td>${r.load}</td><td>${r.wer}</td><td>${r.mel}</td></tr>`).join("");
+  const c = d.cache, c1 = c.find((r) => r.run === "1"), c2 = c.find((r) => r.run === "2");
+  $("st-take").innerHTML = `
+    <li><b>固定長度後建起來了</b>：889 個運算有 859 個交給 CoreML、只切成 29 塊，逐步生成比 CPU FP32 快 3.3 倍，錯字率 0%。</li>
+    <li><b>補齊本身會改變輸出</b>：CPU 補齊也一樣差 1.23，所以差異來自補齊不是加速器；仍在「只換隨機種子」的自然變化 1.525 以內。換模型不保證，補齊後要重跑品質檢查。</li>
+    <li><b>首次編譯 ${f2(c1?.load_s ?? 0)} s</b>；開模型快取後第二次起 ${f2(c2?.load_s ?? 0)} s，但快取佔 ${c1?.cache_size_MB_after ?? "?"} MB（原模型 244 MB）。</li>
+    <li><b>結論：維持 CPU INT8</b>——一樣快、短句更快（固定 128 時短句也要算滿）、開機不用編譯、不用多 539 MB 快取。</li>`;
+}
+
+$("cold").onclick = async () => {
+  $("cold").disabled = true; $("coldres").innerHTML = "量測中…（開新行程、從零載入）";
+  try {
+    const r = await (await fetch("/api/coldstart", { method: "POST", body: "{}" })).json();
+    if (r.error) $("coldres").innerHTML = r.error === "busy" ? "正在播放，請等播放結束再量。" : "失敗：" + r.error;
+    else $("coldres").innerHTML = `載入 4 個模型 <b>${f2(r.load_s)} s</b>（逐步生成 ${f2(r.per_model_s.vector_estimator)} s）`
+      + `，第一句 "Turn left." <b>${f2(r.first_synth_s)} s</b>；整個新行程 ${f2(r.process_total_s)} s（含啟動 Python 與載入程式庫 ${f2(r.import_s)} s）。`;
+  } catch (e) { $("coldres").innerHTML = "失敗：" + e; }
+  $("cold").disabled = false;
+};
+loadExperiments();
 
 loop();
 window.addEventListener("resize", () => panels.forEach(draw));

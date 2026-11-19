@@ -1,0 +1,4 @@
+run,cache_dir,load_s,cache_size_MB_after
+1,empty,7.86,539
+2,warm,1.39,539
+3,warm,1.39,539
