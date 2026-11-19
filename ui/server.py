@@ -27,13 +27,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 os.chdir(ROOT)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from engine import Engine  # noqa: E402
-from streamer import stream  # noqa: E402
+from streamer import Control, stream  # noqa: E402
 
 INT8 = {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}
 ENGINES: dict = {}
 ENGINE_LOCK = threading.Lock()
 RUN_LOCK = threading.Lock()        # 一次只跑一個，避免兩次量測互搶 CPU
 RUNS: dict = {}                    # run_id -> {"q": Queue, "events": [], "audio": bytes|None}
+CURRENT = {"ctl": None}            # 正在播放那一次的控制器（暫停／停止）
 ARGS = None
 
 
@@ -57,12 +58,14 @@ def run_job(run_id: str, p: dict):
     with RUN_LOCK:
         try:
             eng = get_engine(p["variant"], int(p.get("threads", 0)))
+            ctl = Control()
+            CURRENT["ctl"] = ctl
             epoch = time.time()
             emit({"type": "run", "run": run_id, "epoch": epoch, **p})
             st = stream(eng, p["text"], policy=p["mode"], steps=int(p["steps"]),
                         prefill_s=float(p.get("prefill", 0.2)),
                         player="sim" if ARGS.silent else "device",
-                        on_event=emit, record=True)
+                        on_event=emit, record=True, control=ctl)
             # 把實際送給喇叭的聲音串起來（影片配音用，跟畫面同一條時間軸）
             rec = st.core.recorded
             if rec:
@@ -76,6 +79,7 @@ def run_job(run_id: str, p: dict):
         except Exception as ex:  # 讓畫面看得到錯誤，不要卡住
             emit({"type": "error", "message": repr(ex)})
         finally:
+            CURRENT["ctl"] = None
             r["q"].put(None)
 
 
@@ -128,10 +132,26 @@ class H(BaseHTTPRequestHandler):
         return self._send(404, b"not found", "text/plain")
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/run":
-            return self._send(404, b"not found", "text/plain")
+        path = urlparse(self.path).path
         n = int(self.headers.get("Content-Length", 0))
         p = json.loads(self.rfile.read(n) or b"{}")
+        if path == "/api/control":
+            ctl = CURRENT["ctl"]
+            if ctl is None:
+                return self._send(409, b'{"error":"idle"}', "application/json")
+            a = p.get("action")
+            if a == "pause":
+                ctl.pause.set()
+            elif a == "resume":
+                ctl.pause.clear()
+            elif a == "stop":
+                ctl.cancel.set()
+                ctl.pause.clear()
+            else:
+                return self._send(400, b'{"error":"bad action"}', "application/json")
+            return self._send(200, b'{"ok":true}', "application/json")
+        if path != "/api/run":
+            return self._send(404, b"not found", "text/plain")
         p["text"] = (p.get("text") or "").strip()[:600]
         if not p["text"]:
             return self._send(400, b'{"error":"empty text"}', "application/json")

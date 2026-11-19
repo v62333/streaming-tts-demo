@@ -8,7 +8,7 @@
   :root {
     --bg: #f6f5f1; --card: #fcfcfb; --ink: #1f1f1e; --ink2: #5c5b55; --ink3: #8b8a83;
     --line: #e4e3de; --gen: #2a78d6; --play: #1baf7a; --level: #eb6834; --bad: #d03b3b;
-    --chip: #efeee9; --accent: #1f1f1e;
+    --chip: #efeee9; --accent: #1f1f1e; --pause: #b9b8b0;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -30,7 +30,10 @@
   .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; }
   .seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 6px;
                 font: inherit; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
-  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+  .seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+  .seg.dim { opacity: .4; pointer-events: none; }
+  .note { font-size: 12px; color: var(--ink3); margin-left: 54px; margin-top: -4px; min-height: 16px; }
+  .btn.warn { background: #fff; color: var(--ink); border: 1px solid var(--line); }
   .actions { display: flex; gap: 8px; margin-top: 4px; }
   .btn { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
   .btn.primary { background: var(--accent); color: #fff; }
@@ -93,9 +96,12 @@
           <button data-v="4">4</button>
           <button data-v="2">2</button>
         </div></div>
+      <div class="note" id="note"></div>
       <div class="actions">
         <button class="btn primary" id="play">▶ 播放</button>
         <button class="btn ghost" id="compare">對照：整句 vs 逐句</button>
+        <button class="btn warn" id="pause" disabled>⏸ 暫停</button>
+        <button class="btn warn" id="stop" disabled>■ 停止</button>
       </div>
     </div>
   </div>
@@ -149,12 +155,14 @@ function newPanel(title, params) {
       <span><i style="background:${css('--gen')}"></i>生成中（每段）</span>
       <span><i style="background:${css('--play')}"></i>播放中</span>
       <span><i style="background:${css('--bad')}"></i>斷音</span>
+      <span><i style="background:${css('--pause')}"></i>使用者暫停（不算斷音）</span>
       <span><i style="background:${css('--level')};height:3px"></i>緩衝水位（秒）</span>
     </div>
     <div class="segs"></div>`;
   $("panels").appendChild(el);
   const p = { el, cv: el.querySelector("canvas"), params, segs: [], gen: {}, first: null, end: null,
-              under: [], level: [], t0: null, done: false, summary: null, cap: 5 };
+              under: [], level: [], t0: null, done: false, summary: null, cap: 5,
+              pauses: [], stopped: null };
   panels.push(p); return p;
 }
 
@@ -202,7 +210,16 @@ function draw(p) {
   if (p.first != null) {
     const a = x(p.first), b = x(p.end ?? nt);
     c.fillStyle = css("--play"); roundRect(c, a, rows.play, Math.max(b - a, 2), rh, 4);
+    for (const ps of p.pauses) {
+      const pa = x(ps.a), pb = x(ps.b ?? nt);
+      c.fillStyle = css("--pause"); c.fillRect(pa, rows.play, Math.max(pb - pa, 2), rh);
+      if (pb - pa > 40) { c.fillStyle = "#fff"; c.fillText("暫停", pa + 6, rows.play + rh / 2); }
+    }
     for (const u of p.under) { c.fillStyle = css("--bad"); c.fillRect(x(u) - 1, rows.play - 3, 3, rh + 6); }
+    if (p.stopped != null) {
+      c.fillStyle = css("--ink"); c.fillRect(x(p.stopped) - 1, rows.gen - 4, 3, lvTop + lvH - rows.gen + 4);
+      c.fillText("■ 停止", Math.min(x(p.stopped) + 6, W - 60), rows.gen + rh / 2);
+    }
     // 開口標記
     c.strokeStyle = css("--ink"); c.setLineDash([3, 3]); c.beginPath();
     c.moveTo(a, top); c.lineTo(a, lvTop + lvH); c.stroke(); c.setLineDash([]);
@@ -263,38 +280,61 @@ async function runOnce(params, title) {
       else if (e.type === "underrun") { p.under.push(e.t); setStat(p, "under", `${p.under.length}<small>次</small>`, true); }
       else if (e.type === "level") { p.level.push({ t: e.t, v: e.level_s }); if (p.first != null && !p.under.length) setStat(p, "under", `0<small>次</small>`); }
       else if (e.type === "end") { p.end = e.t; }
+      else if (e.type === "pause") { p.pauses.push({ a: e.t, b: null }); setPauseBtn(true); }
+      else if (e.type === "resume") { const last = p.pauses.at(-1); if (last) last.b = e.t; setPauseBtn(false); }
+      else if (e.type === "stopped") { p.stopped = e.t; p.end = e.t; const last = p.pauses.at(-1); if (last && last.b == null) last.b = e.t;
+                                       $("status").innerHTML = "已停止，等目前這段生成結束後就能再播放…"; }
       else if (e.type === "done") {
         p.done = true; p.summary = e.summary; es.close();
         const s = e.summary;
         setStat(p, "under", `${s.underruns}<small>次${s.underruns ? `／${s.underrun_ms} ms` : ""}</small>`, s.underruns > 0);
-        setStat(p, "dur", `${s.audio_s}<small>s</small> / ${s.wall_s}<small>s</small>`);
+        setStat(p, "dur", s.stopped ? `已停止<small>（生成 ${s.audio_s}s 聲音）</small>`
+                               : `${s.audio_s}<small>s</small> / ${s.wall_s}<small>s</small>`);
         resolve(p);
       } else if (e.type === "error") { $("status").textContent = "錯誤：" + e.message; p.done = true; es.close(); resolve(null); }
     };
   });
 }
 
-function setBusy(b) { $("play").disabled = b; $("compare").disabled = b; }
+let stopAll = false;
+function setBusy(b, compare = false) {
+  $("play").disabled = b; $("compare").disabled = b;
+  $("pause").disabled = !b; $("stop").disabled = !b; setPauseBtn(false);
+  $("mode").classList.toggle("dim", b && compare);
+  $("note").textContent = b && compare ? "對照模式固定比較「整句」與「逐句」，只採用你選的模型與步數" : "";
+}
+let paused = false;
+function setPauseBtn(on) { paused = on; $("pause").textContent = on ? "▶ 繼續" : "⏸ 暫停"; }
+async function control(action) {
+  await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ action }) });
+}
+$("pause").onclick = () => control(paused ? "resume" : "pause");
+$("stop").onclick = () => { stopAll = true; $("pause").disabled = true; control("stop"); };
 
 $("play").onclick = async () => {
   const params = { text: $("text").value, mode: pick("mode"), variant: pick("variant"), steps: +pick("steps") };
-  panels = []; $("panels").innerHTML = ""; sharedMax = 4; setBusy(true);
+  panels = []; $("panels").innerHTML = ""; sharedMax = 4; stopAll = false; setBusy(true);
   $("status").innerHTML = `播放中：<b>${MODE_NAME[params.mode]}</b>`;
   const p = await runOnce(params, MODE_NAME[params.mode]);
-  if (p?.summary) $("status").innerHTML = `完成。首段延遲 <b>${(p.first ?? 0).toFixed(2)} s</b>，斷音 <b>${p.summary.underruns}</b> 次。`;
+  if (p?.summary?.stopped) $("status").innerHTML = "已停止。";
+  else if (p?.summary) $("status").innerHTML = `完成。首段延遲 <b>${(p.first ?? 0).toFixed(2)} s</b>，斷音 <b>${p.summary.underruns}</b> 次`
+    + (p.summary.paused_s ? `（暫停 ${p.summary.paused_s} s 不計入）` : "") + "。";
   setBusy(false);
 };
 
 $("compare").onclick = async () => {
   const base = { text: $("text").value, variant: pick("variant"), steps: +pick("steps") };
-  panels = []; $("panels").innerHTML = ""; setBusy(true);
+  panels = []; $("panels").innerHTML = ""; stopAll = false; setBusy(true, true);
   sharedMax = 4;
   $("status").innerHTML = "對照 1/2：<b>整句做完才播</b>";
   const a = await runOnce({ ...base, mode: "whole" }, "A｜整句做完才播");
   if (a) sharedMax = Math.max(sharedMax, (a.end ?? 0) + 0.3);
+  if (stopAll || a?.summary?.stopped) { $("status").innerHTML = "已停止對照。"; setBusy(false); return; }
   $("status").innerHTML = "對照 2/2：<b>逐句串流</b>（同一段文字、同一個模型）";
   const b = await runOnce({ ...base, mode: "sentence" }, "B｜逐句串流");
-  if (a && b) {
+  if (b?.summary?.stopped) { $("status").innerHTML = "已停止對照。"; }
+  else if (a && b) {
     sharedMax = Math.max(sharedMax, (b.end ?? 0) + 0.3);
     const d = a.first - b.first;
     $("status").innerHTML = `同一段文字：逐句串流提早 <b>${d.toFixed(2)} s</b> 開口（${a.first.toFixed(2)} s → ${b.first.toFixed(2)} s），兩次斷音 <b>${a.summary.underruns}</b> / <b>${b.summary.underruns}</b> 次。`;

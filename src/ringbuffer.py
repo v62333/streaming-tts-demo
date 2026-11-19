@@ -13,6 +13,10 @@ import threading
 import numpy as np
 
 
+class BufferClosed(Exception):
+    """緩衝已關閉（例如使用者按停止），寫入端應立即放棄。"""
+
+
 class RingBuffer:
     def __init__(self, capacity: int):
         self.buf = np.zeros(capacity, dtype=np.float32)
@@ -32,7 +36,11 @@ class RingBuffer:
         i = 0
         while i < len(x):
             with self.not_full:
+                if self.closed:
+                    raise BufferClosed()
                 while self.cap - (self.w - self.r) == 0:
+                    if self.closed:
+                        raise BufferClosed()
                     if not self.not_full.wait(timeout):
                         raise TimeoutError("ring buffer full too long")
                 free = self.cap - (self.w - self.r)
