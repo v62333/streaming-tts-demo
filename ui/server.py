@@ -41,7 +41,8 @@ def load_mem_ref():
     import ast
     ref = {}
     try:
-        for line in open(os.path.join(ROOT, "results", "08_memory.txt")):
+        # 11/19 重量的版本（同機同程式，絕對值比 11/18 高 10～15%，見 README 踩坑 10）
+        for line in open(os.path.join(ROOT, "results", "08_memory_1119.txt")):
             k, v = line.split(" ", 1)
             ref[{"int8ve": "int8"}.get(k, k)] = int(np.median([d["peak_rss_MB"] for d in ast.literal_eval(v)]))
     except (OSError, ValueError):
