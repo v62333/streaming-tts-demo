@@ -200,9 +200,9 @@ if os.path.exists("results/09_loadtest.csv"):
         a_.set_ylabel(y_)
         a_.set_xticks(sorted({int(r["users"]) for r in rows}))
         a_.set_ylim(0, None)
-    axs[0].legend(frameon=False, fontsize=8.5, loc="upper left")
+    axs[0].legend(frameon=False, fontsize=8.5, loc="lower right")
     axs[2].legend(frameon=False, fontsize=8, loc="upper left")
-    fig.suptitle("同樣 4 顆 CPU：排隊（A）開口較晚但沒有人斷音、滿了就拒絕；一起分（B）開口較快但 8 人起有人斷音",
+    fig.suptitle("同樣 4 顆 CPU：排隊（A）每一級都沒人斷音、滿了就拒絕；一起分（B）12 人內開口較快，但 8 人起有人斷音、16 人起開口也比 A 慢",
                  x=0.01, ha="left", fontsize=13, fontweight="bold", color=INK)
     fig.tight_layout(rect=(0, 0.0, 1, 0.94))
-    save(fig, "6_cloud_loadtest", "Docker --cpus=4 --memory=2g（Mac 上的 Linux 虛擬機）、INT8、8 步、逐句串流、排隊上限 8（超過回 503，被拒的人不計入延遲）｜每點＝2 次的中位數｜資料：results/09_loadtest.csv")
+    save(fig, "6_cloud_loadtest", "Docker --cpus=4 --memory=2g（Mac 上的 Linux 虛擬機）、INT8、8 步、逐句串流、排隊上限 8（同一時間 A 最多收 2+8、B 最多收 8+8 人，超過回 503，被拒的人不計入延遲）｜每點＝2 次的中位數｜資料：results/09_loadtest.csv")
