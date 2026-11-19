@@ -1,9 +1,9 @@
-"""實驗 12：固定輸入長度（補齊到固定桶子）讓加速器的嚴格格式建得起來。
+"""實驗 12：固定輸入長度（不足的補齊）讓加速器的嚴格格式建得起來。
 
 實驗 11 發現 CoreML 的 MLProgram 格式遇到「長度不固定」的輸入會建模型失敗
 （推算形狀時卷積輸出太小）。車用 NPU、TensorRT 常見的解法：
-  事先把模型的輸入長度固定成一個「桶子」（這裡文字 128、潛在 128，涵蓋測試句最長 102／92），
-  每句話補零到桶子大小、用遮罩標出哪些是補的，跑完再裁回原長度。
+  事先把模型的輸入長度固定成一個長度（這裡文字 128、潛在 128，涵蓋測試句最長 102／92），
+  每句話補零到這個長度、用遮罩標出哪些是補的，跑完再裁回原長度。
 
 分兩步驗證：
   1. 補齊本身會不會改變結果（全在 CPU 上：補齊 vs 不補齊）
@@ -48,7 +48,7 @@ def make_fixed():
 
 
 def plan_padded(eng: Engine, ve, text, steps=8, speed=1.05, seed=0):
-    """同 Engine.plan，但逐步生成那段用補齊到桶子大小的固定長度模型。"""
+    """同 Engine.plan，但逐步生成那段用補齊到固定長度的模型。"""
     ids, mask = eng.tp([text], ["en"])
     dur, *_ = eng.sess["duration_predictor"].run(None, {"text_ids": ids, "style_dp": eng.style.dp, "text_mask": mask})
     dur = dur / speed
