@@ -22,6 +22,19 @@
 - `src/ringbuffer.py`：固定容量環形緩衝。寫端背壓（車用不能丟音）；讀端永不阻塞（音效卡回呼被卡住會爆音）。Python 版用一把鎖；產品版應改 C/C++ 無鎖單生產者單消費者結構。
 - `src/streamer.py`：切段策略、預填量、斷音判定、水位記錄；播放端可選「模擬音效卡節拍」（量測用）或真實喇叭（demo 用）。
 
+## Demo 網頁與影片
+
+▶ [demo 影片 results/video/streaming_tts_demo.mp4](results/video/streaming_tts_demo.mp4)（68 秒）：FP32 同一段文字「整句做完才播 vs 逐句串流」對照，接著 INT8 逐句串流。
+
+- **聲音是那一次真正播出去的聲音**：播放核心把每個送給喇叭的區塊連同時間戳記下來，再依畫面上「綠色播放條第一次出現」的那一格自動對齊（`ui/mux_video.py`），不是事後配音。
+- **畫面上每個點都是同一次播放回報的事件**：每段生成開始／完成、開口、斷音、緩衝水位（每 50 ms）。
+
+```bash
+.venv/bin/python ui/server.py                 # 開 http://127.0.0.1:8765，聲音從本機喇叭出
+.venv/bin/python ui/server.py --silent        # 不出聲（模擬音效卡節拍）
+PW=<playwright 模組路徑> node ui/record_demo.cjs   # 自動操作網頁並錄成 results/video/streaming_tts_demo.mp4
+```
+
 ## 為什麼是「逐句」串流，不是逐格
 
 一開始的規劃是「前段整句算、只把聲碼器切段」。**先量才發現行不通**（實驗 1，n=5 中位數）：

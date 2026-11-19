@@ -68,31 +68,48 @@ class PlaybackCore:
     """播放端邏輯：未開播時等預填量；開播後每 block 取資料，不足即算斷音。"""
 
     def __init__(self, rb: RingBuffer, sr: int, block: int, prefill: int,
-                 stats: PlaybackStats, producer_done: threading.Event):
+                 stats: PlaybackStats, producer_done: threading.Event,
+                 on_event=None, record: bool = False):
         self.rb, self.sr, self.block, self.prefill = rb, sr, block, prefill
         self.st, self.done = stats, producer_done
         self.started = False
         self.finished = threading.Event()
+        self.emit = on_event or (lambda e: None)
+        self.recorded = [] if record else None   # (相對送出時刻, 實際送給喇叭的 block)
+        self._last_level_emit = -1.0
 
     def tick(self) -> np.ndarray:
         now = time.perf_counter()
+        t = now - self.st.t_submit
         lvl = self.rb.level()
-        self.st.level_trace.append((now - self.st.t_submit, lvl / self.sr))
+        self.st.level_trace.append((t, lvl / self.sr))
+        if t - self._last_level_emit >= 0.05:
+            self._last_level_emit = t
+            self.emit({"type": "level", "t": round(t, 3), "level_s": round(lvl / self.sr, 3)})
         if not self.started:
             if lvl >= self.prefill or (self.done.is_set() and lvl > 0):
                 self.started = True
                 self.st.t_first_audio = now
+                self.emit({"type": "first_audio", "t": round(t, 3)})
             else:
-                return np.zeros(self.block, dtype=np.float32)
+                return self._out(t, np.zeros(self.block, dtype=np.float32))
         data, got = self.rb.read_nowait(self.block)
         if got < self.block:
             if self.done.is_set() and self.rb.level() == 0:
                 if not self.finished.is_set():
                     self.st.t_end = now + got / self.sr
                     self.finished.set()
+                    self.emit({"type": "end", "t": round(self.st.t_end - self.st.t_submit, 3)})
             else:
                 self.st.underruns += 1
                 self.st.underrun_s += (self.block - got) / self.sr
+                self.emit({"type": "underrun", "t": round(t, 3),
+                           "missing_s": round((self.block - got) / self.sr, 4)})
+        return self._out(t, data)
+
+    def _out(self, t, data):
+        if self.recorded is not None:
+            self.recorded.append((t, data.copy()))
         return data
 
 
@@ -116,12 +133,16 @@ class SimulatedPlayer(threading.Thread):
 
 # ---------------- 生產者 ----------------
 def produce(engine, segments: list[str], rb: RingBuffer, stats: PlaybackStats,
-            done: threading.Event, steps: int, gap_s: float, write_block: int):
+            done: threading.Event, steps: int, gap_s: float, write_block: int,
+            emit=lambda e: None):
     gap = np.zeros(int(gap_s * engine.sr), dtype=np.float32)
     for i, seg in enumerate(segments):
         t0 = time.perf_counter()
+        emit({"type": "seg_start", "i": i, "t": round(t0 - stats.t_submit, 3), "text": seg})
         wav, _ = engine.synth_full(seg, steps=steps)
         t1 = time.perf_counter()
+        emit({"type": "seg_done", "i": i, "t": round(t1 - stats.t_submit, 3),
+              "gen_s": round(t1 - t0, 3), "audio_s": round(len(wav) / engine.sr, 3)})
         stats.seg_gen_s.append(t1 - t0)
         stats.seg_ready.append(t1 - stats.t_submit)
         stats.seg_audio_s.append(len(wav) / engine.sr)
@@ -135,18 +156,22 @@ def produce(engine, segments: list[str], rb: RingBuffer, stats: PlaybackStats,
 
 def stream(engine, text: str, policy: str = "sentence", steps: int = 8,
            prefill_s: float = 0.2, capacity_s: float = 5.0, block: int = 1024,
-           gap_s: float = 0.15, player: str = "sim") -> PlaybackStats:
+           gap_s: float = 0.15, player: str = "sim", on_event=None,
+           record: bool = False) -> PlaybackStats:
     sr = engine.sr
     rb = RingBuffer(int(capacity_s * sr))
     st = PlaybackStats(t_submit=time.perf_counter())
     done = threading.Event()
-    core = PlaybackCore(rb, sr, block, int(prefill_s * sr), st, done)
+    core = PlaybackCore(rb, sr, block, int(prefill_s * sr), st, done, on_event, record)
+    st.core = core
     segs = split_text(text, policy)
+    emit = on_event or (lambda e: None)
+    emit({"type": "plan", "segments": segs, "sr": sr, "capacity_s": capacity_s})
 
     if player == "sim":
         p = SimulatedPlayer(core)
         p.start()
-        produce(engine, segs, rb, st, done, steps, gap_s, write_block=block * 4)
+        produce(engine, segs, rb, st, done, steps, gap_s, write_block=block * 4, emit=emit)
         p.join()
     else:
         import sounddevice as sd
@@ -155,7 +180,7 @@ def stream(engine, text: str, policy: str = "sentence", steps: int = 8,
             outdata[:, 0] = core.tick()
         with sd.OutputStream(samplerate=sr, channels=1, blocksize=block,
                              dtype="float32", callback=cb):
-            produce(engine, segs, rb, st, done, steps, gap_s, write_block=block * 4)
+            produce(engine, segs, rb, st, done, steps, gap_s, write_block=block * 4, emit=emit)
             core.finished.wait()
             time.sleep(0.3)
     return st

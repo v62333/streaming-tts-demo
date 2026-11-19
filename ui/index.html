@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streaming TTS Demo</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #fcfcfb; --ink: #1f1f1e; --ink2: #5c5b55; --ink3: #8b8a83;
+    --line: #e4e3de; --gen: #2a78d6; --play: #1baf7a; --level: #eb6834; --bad: #d03b3b;
+    --chip: #efeee9; --accent: #1f1f1e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 -apple-system, "PingFang TC", "Helvetica Neue", sans-serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 40px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .2px; }
+  .sub { color: var(--ink2); font-size: 13.5px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .controls { display: grid; grid-template-columns: 1fr auto; gap: 16px; }
+  textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid var(--line);
+             border-radius: 8px; padding: 10px 12px; font: inherit; background: #fff; color: var(--ink); }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .presets button { font-size: 12.5px; padding: 3px 10px; background: var(--chip); border: 0;
+                    border-radius: 99px; color: var(--ink2); cursor: pointer; }
+  .opts { display: flex; flex-direction: column; gap: 10px; min-width: 330px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row > label { width: 44px; color: var(--ink2); font-size: 13px; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; }
+  .seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 6px;
+                font: inherit; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+  .actions { display: flex; gap: 8px; margin-top: 4px; }
+  .btn { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.ghost { background: var(--chip); color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .status { margin: 14px 2px 10px; color: var(--ink2); font-size: 13.5px; min-height: 20px; }
+  .status b { color: var(--ink); }
+  .panels { display: flex; flex-direction: column; gap: 14px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel-title { font-weight: 700; font-size: 15px; }
+  .tag { font-size: 12px; color: var(--ink2); background: var(--chip); border-radius: 6px; padding: 2px 8px; margin-left: 6px; font-weight: 500; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #fff; }
+  .stat .k { font-size: 12px; color: var(--ink2); }
+  .stat .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+  .stat .v small { font-size: 13px; font-weight: 500; color: var(--ink2); margin-left: 2px; }
+  .stat.bad .v { color: var(--bad); }
+  canvas { width: 100%; display: block; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink2); margin-top: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .segs { margin-top: 8px; font-size: 13px; color: var(--ink3); }
+  .segs span { margin-right: 6px; }
+  .segs span.gen { color: var(--gen); font-weight: 600; }
+  .segs span.ok { color: var(--ink2); }
+  footer { margin-top: 18px; font-size: 12px; color: var(--ink3); }
+  @media (max-width: 760px) {
+    .controls { grid-template-columns: 1fr; }
+    .opts { min-width: 0; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Streaming TTS Demo</h1>
+    <span class="sub">Supertonic-3 · ONNX Runtime · Apple M4 CPU — 每次按下都是現場推論與量測</span>
+  </header>
+
+  <div class="card controls">
+    <div>
+      <textarea id="text"></textarea>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div class="opts">
+      <div class="row"><label>模式</label>
+        <div class="seg" id="mode">
+          <button data-v="whole">整句做完才播</button>
+          <button data-v="sentence" class="on">逐句串流</button>
+          <button data-v="first_clause">逐句＋首句切逗號</button>
+        </div></div>
+      <div class="row"><label>模型</label>
+        <div class="seg" id="variant">
+          <button data-v="fp32">FP32</button>
+          <button data-v="int8" class="on">INT8</button>
+        </div></div>
+      <div class="row"><label>步數</label>
+        <div class="seg" id="steps">
+          <button data-v="8" class="on">8</button>
+          <button data-v="4">4</button>
+          <button data-v="2">2</button>
+        </div></div>
+      <div class="actions">
+        <button class="btn primary" id="play">▶ 播放</button>
+        <button class="btn ghost" id="compare">對照：整句 vs 逐句</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="status">選好設定後按「播放」。聲音從這台電腦的喇叭播出。</div>
+  <div class="panels" id="panels"></div>
+
+  <footer>時間軸上的每個點都來自同一次播放回報的事件（生成開始／完成、開口、斷音、緩衝水位每 50 ms）。斷音＝播放時緩衝區沒有資料、只能補靜音。</footer>
+</div>
+
+<script>
+const PRESETS = {
+  "導航": "In two hundred meters, turn right onto Main Street. Then keep left at the fork. Your destination will be on the right.",
+  "電量": "Your battery is at twenty percent. The nearest charging station is four kilometers ahead, on the right side of the highway. Charging to eighty percent will take about thirty minutes.",
+  "改道": "Traffic is heavy on the route ahead, so I found a faster way that saves about twelve minutes. It goes through the city center, and there is one toll road. Would you like me to switch to the new route, or keep the current one?",
+  "訊息": "New message from Anna. She says she is running late and will meet you at the restaurant at seven thirty. Do you want to reply?",
+};
+const MODE_NAME = { whole: "整句做完才播", sentence: "逐句串流", first_clause: "逐句＋首句切逗號" };
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+$("text").value = PRESETS["改道"];
+for (const [k, v] of Object.entries(PRESETS)) {
+  const b = document.createElement("button"); b.textContent = k;
+  b.onclick = () => { $("text").value = v; }; $("presets").appendChild(b);
+}
+for (const g of ["mode", "variant", "steps"]) {
+  $(g).querySelectorAll("button").forEach((b) => b.onclick = () => {
+    $(g).querySelectorAll("button").forEach((x) => x.classList.remove("on")); b.classList.add("on");
+  });
+}
+const pick = (g) => $(g).querySelector("button.on").dataset.v;
+
+// ---------- 一次播放的狀態 ----------
+let panels = [];      // 目前畫面上的面板
+let sharedMax = 4;    // 對照模式共用時間軸
+
+function newPanel(title, params) {
+  const el = document.createElement("div"); el.className = "card";
+  el.innerHTML = `
+    <div class="panel-head"><div class="panel-title">${title}
+      <span class="tag">${params.variant.toUpperCase()}</span><span class="tag">${params.steps} 步</span></div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">首段延遲（送出 → 開口）</div><div class="v" data-k="first">—</div></div>
+      <div class="stat"><div class="k">斷音</div><div class="v" data-k="under">—</div></div>
+      <div class="stat"><div class="k">生成段數</div><div class="v" data-k="segs">—</div></div>
+      <div class="stat"><div class="k">聲音長度 / 總耗時</div><div class="v" data-k="dur">—</div></div>
+    </div>
+    <canvas height="230"></canvas>
+    <div class="legend">
+      <span><i style="background:${css('--gen')}"></i>生成中（每段）</span>
+      <span><i style="background:${css('--play')}"></i>播放中</span>
+      <span><i style="background:${css('--bad')}"></i>斷音</span>
+      <span><i style="background:${css('--level')};height:3px"></i>緩衝水位（秒）</span>
+    </div>
+    <div class="segs"></div>`;
+  $("panels").appendChild(el);
+  const p = { el, cv: el.querySelector("canvas"), params, segs: [], gen: {}, first: null, end: null,
+              under: [], level: [], t0: null, done: false, summary: null, cap: 5 };
+  panels.push(p); return p;
+}
+
+function setStat(p, k, html, bad = false) {
+  const v = p.el.querySelector(`[data-k="${k}"]`); v.innerHTML = html;
+  v.parentElement.classList.toggle("bad", bad);
+}
+
+function nowT(p) {
+  if (p.done) return p.end ?? (p.level.at(-1)?.t ?? 0);
+  return p.t0 == null ? 0 : (performance.now() - p.t0) / 1000;
+}
+
+function draw(p) {
+  const cv = p.cv, dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 230;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const L = 64, R = 14, top = 10;
+  const tmax = Math.max(sharedMax, nowT(p) + 0.3);
+  const x = (t) => L + (W - L - R) * Math.min(t, tmax) / tmax;
+  const rows = { gen: top + 6, play: top + 46 }; const rh = 26;
+  const lvTop = top + 92, lvH = 96;
+  c.font = "12px -apple-system, PingFang TC, sans-serif"; c.textBaseline = "middle";
+  // 軸
+  c.fillStyle = css("--ink2");
+  c.fillText("生成", 8, rows.gen + rh / 2); c.fillText("播放", 8, rows.play + rh / 2);
+  c.fillText("緩衝", 8, lvTop + 10); c.fillText(`${p.cap}s`, 36, lvTop + 4); c.fillText("0", 44, lvTop + lvH);
+  c.strokeStyle = css("--line"); c.lineWidth = 1;
+  const step = tmax > 12 ? 2 : 1;
+  for (let s = 0; s <= tmax; s += step) {
+    const xx = x(s); c.beginPath(); c.moveTo(xx, top); c.lineTo(xx, lvTop + lvH); c.stroke();
+    c.fillStyle = css("--ink3"); c.textAlign = "center"; c.fillText(`${s}s`, xx, lvTop + lvH + 14); c.textAlign = "left";
+  }
+  // 生成段
+  const nt = nowT(p);
+  p.segs.forEach((_, i) => {
+    const g = p.gen[i]; if (!g || g.start == null) return;
+    const a = x(g.start), b = x(g.done ?? nt);
+    c.fillStyle = css("--gen"); c.globalAlpha = g.done == null ? 0.55 : 1;
+    roundRect(c, a, rows.gen, Math.max(b - a - 2, 2), rh, 4); c.globalAlpha = 1;
+    if (b - a > 46) { c.fillStyle = "#fff"; c.fillText(`第${i + 1}段`, a + 6, rows.gen + rh / 2); }
+  });
+  // 播放
+  if (p.first != null) {
+    const a = x(p.first), b = x(p.end ?? nt);
+    c.fillStyle = css("--play"); roundRect(c, a, rows.play, Math.max(b - a, 2), rh, 4);
+    for (const u of p.under) { c.fillStyle = css("--bad"); c.fillRect(x(u) - 1, rows.play - 3, 3, rh + 6); }
+    // 開口標記
+    c.strokeStyle = css("--ink"); c.setLineDash([3, 3]); c.beginPath();
+    c.moveTo(a, top); c.lineTo(a, lvTop + lvH); c.stroke(); c.setLineDash([]);
+    c.fillStyle = css("--ink"); c.font = "600 12.5px -apple-system, PingFang TC, sans-serif";
+    c.fillText(`開口 ${p.first.toFixed(2)} s`, Math.min(a + 6, W - 110), rows.play + rh + 9);
+    c.font = "12px -apple-system, PingFang TC, sans-serif";
+  } else if (p.t0 != null && !p.done) {
+    c.fillStyle = css("--ink3"); c.fillText("等待第一段聲音…", x(nt) + 8, rows.play + rh / 2);
+  }
+  // 緩衝水位
+  c.strokeStyle = css("--line"); c.strokeRect(L, lvTop, W - L - R, lvH);
+  if (p.level.length > 1) {
+    const y = (v) => lvTop + lvH - lvH * Math.min(v / p.cap, 1);
+    c.beginPath(); c.moveTo(x(p.level[0].t), y(0));
+    for (const pt of p.level) c.lineTo(x(pt.t), y(pt.v));
+    c.lineTo(x(p.level.at(-1).t), y(0)); c.closePath();
+    c.fillStyle = css("--level"); c.globalAlpha = 0.14; c.fill(); c.globalAlpha = 1;
+    c.beginPath(); p.level.forEach((pt, k) => k ? c.lineTo(x(pt.t), y(pt.v)) : c.moveTo(x(pt.t), y(pt.v)));
+    c.strokeStyle = css("--level"); c.lineWidth = 2; c.stroke(); c.lineWidth = 1;
+  }
+  // 現在時刻
+  if (!p.done && p.t0 != null) {
+    c.strokeStyle = css("--ink3"); c.beginPath(); c.moveTo(x(nt), top); c.lineTo(x(nt), lvTop + lvH); c.stroke();
+  }
+}
+function roundRect(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2); c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.fill();
+}
+
+function renderSegs(p) {
+  const box = p.el.querySelector(".segs"); box.innerHTML = "";
+  p.segs.forEach((s, i) => {
+    const g = p.gen[i] || {}; const sp = document.createElement("span");
+    sp.textContent = `［${i + 1}］${s}`; sp.className = g.done != null ? "ok" : (g.start != null ? "gen" : "");
+    box.appendChild(sp);
+  });
+}
+
+let raf = null;
+function loop() { panels.forEach(draw); raf = requestAnimationFrame(loop); }
+
+async function runOnce(params, title) {
+  const p = newPanel(title, params);
+  const r = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify(params) });
+  if (!r.ok) { $("status").textContent = r.status === 409 ? "上一次還在播放，請稍候。" : "啟動失敗"; return null; }
+  const { run } = await r.json(); p.run = run; window.__lastRun = run;
+  return await new Promise((resolve) => {
+    const es = new EventSource(`/api/events?run=${run}`);
+    es.onmessage = (m) => {
+      const e = JSON.parse(m.data);
+      if (e.type === "plan") { p.segs = e.segments; p.cap = e.capacity_s; p.t0 = performance.now(); renderSegs(p);
+                               setStat(p, "segs", `${e.segments.length}<small>段</small>`); }
+      else if (e.type === "seg_start") { (p.gen[e.i] ??= {}).start = e.t; renderSegs(p); }
+      else if (e.type === "seg_done") { p.gen[e.i].done = e.t; renderSegs(p); }
+      else if (e.type === "first_audio") { p.first = e.t; setStat(p, "first", `${e.t.toFixed(2)}<small>s</small>`); }
+      else if (e.type === "underrun") { p.under.push(e.t); setStat(p, "under", `${p.under.length}<small>次</small>`, true); }
+      else if (e.type === "level") { p.level.push({ t: e.t, v: e.level_s }); if (p.first != null && !p.under.length) setStat(p, "under", `0<small>次</small>`); }
+      else if (e.type === "end") { p.end = e.t; }
+      else if (e.type === "done") {
+        p.done = true; p.summary = e.summary; es.close();
+        const s = e.summary;
+        setStat(p, "under", `${s.underruns}<small>次${s.underruns ? `／${s.underrun_ms} ms` : ""}</small>`, s.underruns > 0);
+        setStat(p, "dur", `${s.audio_s}<small>s</small> / ${s.wall_s}<small>s</small>`);
+        resolve(p);
+      } else if (e.type === "error") { $("status").textContent = "錯誤：" + e.message; p.done = true; es.close(); resolve(null); }
+    };
+  });
+}
+
+function setBusy(b) { $("play").disabled = b; $("compare").disabled = b; }
+
+$("play").onclick = async () => {
+  const params = { text: $("text").value, mode: pick("mode"), variant: pick("variant"), steps: +pick("steps") };
+  panels = []; $("panels").innerHTML = ""; sharedMax = 4; setBusy(true);
+  $("status").innerHTML = `播放中：<b>${MODE_NAME[params.mode]}</b>`;
+  const p = await runOnce(params, MODE_NAME[params.mode]);
+  if (p?.summary) $("status").innerHTML = `完成。首段延遲 <b>${(p.first ?? 0).toFixed(2)} s</b>，斷音 <b>${p.summary.underruns}</b> 次。`;
+  setBusy(false);
+};
+
+$("compare").onclick = async () => {
+  const base = { text: $("text").value, variant: pick("variant"), steps: +pick("steps") };
+  panels = []; $("panels").innerHTML = ""; setBusy(true);
+  sharedMax = 4;
+  $("status").innerHTML = "對照 1/2：<b>整句做完才播</b>";
+  const a = await runOnce({ ...base, mode: "whole" }, "A｜整句做完才播");
+  if (a) sharedMax = Math.max(sharedMax, (a.end ?? 0) + 0.3);
+  $("status").innerHTML = "對照 2/2：<b>逐句串流</b>（同一段文字、同一個模型）";
+  const b = await runOnce({ ...base, mode: "sentence" }, "B｜逐句串流");
+  if (a && b) {
+    sharedMax = Math.max(sharedMax, (b.end ?? 0) + 0.3);
+    const d = a.first - b.first;
+    $("status").innerHTML = `同一段文字：逐句串流提早 <b>${d.toFixed(2)} s</b> 開口（${a.first.toFixed(2)} s → ${b.first.toFixed(2)} s），兩次斷音 <b>${a.summary.underruns}</b> / <b>${b.summary.underruns}</b> 次。`;
+  }
+  setBusy(false);
+};
+
+loop();
+window.addEventListener("resize", () => panels.forEach(draw));
+</script>
+</body>
+</html>

@@ -13,3 +13,7 @@ results/05_wavs/*
 !results/05_wavs/int8ve_s8_3.wav
 !results/05_wavs/int8all_s8_3.wav
 !results/05_wavs/fp32_s2_3.wav
+# 錄影中間檔（只留最終 mp4）
+results/video/*.webm
+results/video/run_*.wav
+results/video/runs.json
