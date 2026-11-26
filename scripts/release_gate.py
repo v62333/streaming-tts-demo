@@ -97,6 +97,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("candidate")
     ap.add_argument("--out", default="results/gate")
+    ap.add_argument("--quality-only", action="store_true",
+                    help="只用品質項目（錯字率、頻譜偏離）判定；效能項目照量照報，但不影響結果。"
+                         "給 CI 的共用 x86 機器用：效能門檻要在目標硬體上判定。")
     a = ap.parse_args()
     cands = json.load(open("configs/release_candidates.json"))
     th = json.load(open("configs/gate_thresholds.json"))
@@ -117,7 +120,8 @@ def main():
     checks = []
 
     def check(item, value, limit, ok, unit=""):
-        checks.append({"item": item, "value": value, "limit": limit, "unit": unit, "pass": bool(ok)})
+        kind = "quality" if len(checks) < 3 else "perf"     # 前 3 項是品質，後 4 項是效能
+        checks.append({"item": item, "value": value, "limit": limit, "unit": unit, "pass": bool(ok), "kind": kind})
 
     check("錄音辨識錯字率", round(cand["wer_pct"], 2), f"≤ {th['wer_max_pct']}", cand["wer_pct"] <= th["wer_max_pct"], "%")
     d = cand["wer_pct"] - base["wer_pct"]
@@ -132,9 +136,11 @@ def main():
     check("串流首段延遲 p50", round(cand["first_audio_p50_s"], 3), f"≤ {lim:.3f}", cand["first_audio_p50_s"] <= lim, "s")
     check("串流斷音", cand["underruns"], f"≤ {th['underruns_max']}", cand["underruns"] <= th["underruns_max"], "次")
 
-    passed = all(c["pass"] for c in checks)
+    judged = [c for c in checks if c["kind"] == "quality"] if a.quality_only else checks
+    passed = all(c["pass"] for c in judged)
+    mode = "quality-only" if a.quality_only else "full"
     report = {
-        "candidate": a.candidate, "config": cfg, "passed": passed, "checks": checks,
+        "candidate": a.candidate, "config": cfg, "mode": mode, "passed": passed, "checks": checks,
         "baseline": {"wer_pct": round(base["wer_pct"], 2), "rtf": round(base["rtf"], 3),
                      "peak_mb": round(base_mem), "first_audio_p50_s": round(base["first_audio_p50_s"], 3)},
         "speedup_vs_baseline": round(base["rtf"] / cand["rtf"], 2),
@@ -146,12 +152,20 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     json.dump(report, open(f"{a.out}/{a.candidate}.json", "w"), ensure_ascii=False, indent=2)
 
-    md = [f"## 發版關卡：`{a.candidate}` → {'✅ 准許發版' if passed else '❌ 擋下'}", "",
+    title = f"## 發版關卡：`{a.candidate}` → {'✅ 准許發版' if passed else '❌ 擋下'}"
+    if a.quality_only:
+        title = f"## 發版關卡（只判定品質）：`{a.candidate}` → {'✅ 品質通過' if passed else '❌ 品質擋下'}"
+    md = [title, "",
           f"速度是 baseline 的 **{report['speedup_vs_baseline']}×**；機器：{report['machine']['platform']}，"
           f"{report['machine']['cpu_count']} 核；耗時 {report['elapsed_s']} 秒", "",
           "| 檢查 | 結果 | 門檻 | |", "|---|---|---|---|"]
     for c in checks:
-        md.append(f"| {c['item']} | {c['value']} {c['unit']} | {c['limit']} {c['unit']} | {'✅' if c['pass'] else '❌'} |")
+        mark = "✅" if c["pass"] else "❌"
+        if a.quality_only and c["kind"] == "perf":
+            mark += "（參考，不判定）"
+        md.append(f"| {c['item']} | {c['value']} {c['unit']} | {c['limit']} {c['unit']} | {mark} |")
+    if a.quality_only:
+        md += ["", "效能項目只在目標硬體上判定；這台機器的效能數字僅供參考。"]
     if cand["misheard"]:
         md += ["", "聽錯的句子（前 5 句）：", ""]
         md += [f"- 原文「{m['ref']}」→ 聽成「{m['heard']}」" for m in cand["misheard"][:5]]
