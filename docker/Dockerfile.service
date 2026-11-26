@@ -8,7 +8,7 @@ WORKDIR /app
 COPY src/ src/
 COPY third_party/ third_party/
 COPY service/ service/
-ENV PYTHONUNBUFFERED=1 MODEL_VARIANT=int8 ORT_THREADS=1 MAX_CONCURRENT=2 MAX_QUEUE=8 PORT=8800
+ENV PYTHONUNBUFFERED=1 MODEL_VARIANT=int8 ORT_THREADS=1 MAX_CONCURRENT=4 MAX_QUEUE=8 PORT=8800
 EXPOSE 8800
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8800/healthz').status==200 else 1)"
