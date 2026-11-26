@@ -9,7 +9,7 @@ GET  /metrics   → 純文字計數器（請求數、進行中、排隊中、被
 環境變數：
   MODEL_VARIANT   int8 | fp32（預設 int8）
   ORT_THREADS     每個推論用幾條執行緒（預設 1）
-  MAX_CONCURRENT  同時最多幾個請求在生成（預設 2）；其餘排隊
+  MAX_CONCURRENT  同時最多幾個請求在生成（預設 4，搭配 ORT_THREADS=1：執行緒總數＝CPU 數）；其餘排隊
   MAX_QUEUE       排隊上限（預設 8）；再多直接回 503（保護已在服務中的請求不被拖垮）
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ from streamer import split_text  # noqa: E402
 
 VARIANT = os.environ.get("MODEL_VARIANT", "int8")
 THREADS = int(os.environ.get("ORT_THREADS", "1"))
-MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "2"))
+MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "4"))
 MAX_QUEUE = int(os.environ.get("MAX_QUEUE", "8"))
 
 ENGINE: Engine | None = None
