@@ -1,4 +1,4 @@
-# 執行、量測、發版關卡用（Python 3.12）
+# 執行、量測、發版標準用（Python 3.12）
 onnxruntime==1.32.0
 numpy==2.5.5
 soundfile==0.14.0

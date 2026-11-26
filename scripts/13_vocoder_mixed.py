@@ -3,7 +3,7 @@
 實驗 6 的消融結果：33 層卷積裡，只要第 1 層（輸入層 embed）和最後 2 層（輸出頭 head）留 FP32，
 錯字率就回到 0%。這支腳本產生正式採用的版本：這 3 層 FP32、其餘 30 層 INT8。
 需要先跑 scripts/04_quantize.py（產生 vocoder.pre.onnx）。
-發版關卡：python scripts/release_gate.py int8_mixed
+發版標準：python scripts/release_gate.py int8_mixed
 """
 import os
 

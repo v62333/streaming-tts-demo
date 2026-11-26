@@ -1,4 +1,4 @@
-"""發版品質關卡：候選版本要過所有檢查才准發版，否則結束碼 1（CI 會亮紅燈）。
+"""發版品質標準：候選版本要過所有檢查才准發版，否則結束碼 1（CI 會亮紅燈）。
 
   python scripts/release_gate.py int8_ve           # 預期通過
   python scripts/release_gate.py int8_all          # 預期擋下（聲碼器量化壞掉）
@@ -152,9 +152,9 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     json.dump(report, open(f"{a.out}/{a.candidate}.json", "w"), ensure_ascii=False, indent=2)
 
-    title = f"## 發版關卡：`{a.candidate}` → {'✅ 准許發版' if passed else '❌ 擋下'}"
+    title = f"## 發版標準：`{a.candidate}` → {'✅ 准許發版' if passed else '❌ 擋下'}"
     if a.quality_only:
-        title = f"## 發版關卡（只判定品質）：`{a.candidate}` → {'✅ 品質通過' if passed else '❌ 品質擋下'}"
+        title = f"## 發版標準（只判定品質）：`{a.candidate}` → {'✅ 品質通過' if passed else '❌ 品質擋下'}"
     md = [title, "",
           f"速度是 baseline 的 **{report['speedup_vs_baseline']}×**；機器：{report['machine']['platform']}，"
           f"{report['machine']['cpu_count']} 核；耗時 {report['elapsed_s']} 秒", "",

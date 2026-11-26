@@ -1,8 +1,8 @@
-# 每次推程式碼：單元測試 → 下載模型 → 量化 → 發版關卡（--quality-only：只判定品質）
+# 每次推程式碼：單元測試 → 下載模型 → 量化 → 發版標準（--quality-only：只判定品質）
 #   CI 是共用的 x86 機器，INT8 在這裡反而比 FP32 慢（見 README），效能門檻要在目標硬體上判定；
 #   速度、記憶體、首段延遲、斷音照量照報，但不影響結果。
 #   int8_ve、int8_mixed 品質必須「通過」
-#   int8_all 必須「被擋下」（證明關卡真的會擋壞版本，不是永遠綠燈）
+#   int8_all 必須「被擋下」（證明標準真的會擋壞版本，不是永遠綠燈）
 name: release-gate
 
 on:
@@ -49,14 +49,14 @@ jobs:
         run: python scripts/04_quantize.py
       - name: 聲碼器混合精度（第 1 層＋最後 2 層留 FP32）
         run: python scripts/13_vocoder_mixed.py
-      - name: 關卡 int8_ve（必須通過）
+      - name: 發版標準 int8_ve（必須通過）
         run: python scripts/release_gate.py int8_ve --quality-only
-      - name: 關卡 int8_mixed（必須通過，採用版本）
+      - name: 發版標準 int8_mixed（必須通過，採用版本）
         run: python scripts/release_gate.py int8_mixed --quality-only
-      - name: 關卡 int8_all（必須被擋下）
+      - name: 發版標準 int8_all（必須被擋下）
         run: |
           if python scripts/release_gate.py int8_all --quality-only; then
-            echo "::error::int8_all 應該被擋下卻放行了，關卡失效"; exit 1
+            echo "::error::int8_all 應該被擋下卻放行了，標準失效"; exit 1
           else
             echo "int8_all 被正確擋下"
           fi
