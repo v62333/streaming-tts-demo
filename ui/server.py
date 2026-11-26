@@ -32,14 +32,23 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from engine import Engine  # noqa: E402
 from streamer import Control, stream  # noqa: E402
 
-INT8 = {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}
+INT8 = {"vector_estimator": "models/int8/vector_estimator.int8.onnx",       # 採用版本 int8_mixed：
+        "vocoder": "models/int8/vocoder.int8_mixed3.onnx"}                     # 聲碼器 3 層 FP32、30 層 INT8
 ENGINES: dict = {}
 
 
 def load_mem_ref():
-    """讀實驗 8 的實測峰值記憶體（每個模型在獨立行程量；伺服器同時載兩套，無法現場分開量）。"""
+    """峰值記憶體參考值（獨立行程實測；伺服器同時載兩套，無法現場分開量）。
+    優先用發版標準 int8_mixed 那一次的同次量測（FP32 baseline 與採用版本），沒有才退回實驗 8。"""
     import ast
     ref = {}
+    try:
+        g = json.load(open(os.path.join(ROOT, "results", "gate", "int8_mixed.json")))
+        ref["fp32"] = int(g["baseline"]["peak_mb"])
+        ref["int8"] = int(next(c["value"] for c in g["checks"] if c["item"] == "峰值記憶體"))
+        return ref
+    except (OSError, ValueError, KeyError, StopIteration):
+        pass
     try:
         # 11/19 重量的版本（同機同程式，絕對值比 11/18 高 10～15%，見 README 踩坑 10）
         for line in open(os.path.join(ROOT, "results", "08_memory_1119.txt")):

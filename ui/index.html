@@ -113,7 +113,7 @@
       <div class="row"><label>模型</label>
         <div class="seg" id="variant">
           <button data-v="fp32">FP32</button>
-          <button data-v="int8" class="on">INT8</button>
+          <button data-v="int8" class="on" title="採用版本：逐步生成 INT8＋聲碼器混合精度">INT8</button>
         </div></div>
       <div class="row"><label>步數</label>
         <div class="seg" id="steps">
@@ -210,7 +210,7 @@ function newPanel(title, params) {
       <div class="stat"><div class="k">生成段數</div><div class="v" data-k="segs">—</div></div>
       <div class="stat"><div class="k">聲音長度 / 總耗時</div><div class="v" data-k="dur">—</div></div>
       <div class="stat"><div class="k">生成速度（越小越快）</div><div class="v" data-k="rtf">—</div><div class="h" data-h="rtf">生成耗時 ÷ 聲音長度</div></div>
-      <div class="stat"><div class="k">峰值記憶體</div><div class="v" data-k="mem">—</div><div class="h">獨立行程實測（實驗 8，11/19）</div></div>
+      <div class="stat"><div class="k">峰值記憶體</div><div class="v" data-k="mem">—</div><div class="h">獨立行程實測（發版標準，11/26）</div></div>
     </div>
     <canvas height="230"></canvas>
     <div class="legend">
