@@ -5,5 +5,7 @@
   "int8_ve_s4":     {"steps": 4, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx"}},
   "int8_all":       {"steps": 8, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx",
                                                "vocoder": "models/int8/vocoder.int8.onnx"}},
+  "int8_mixed":     {"steps": 8, "overrides": {"vector_estimator": "models/int8/vector_estimator.int8.onnx",
+                                               "vocoder": "models/int8/vocoder.int8_mixed3.onnx"}},
   "fp32_s2":        {"steps": 2, "overrides": {}}
 }

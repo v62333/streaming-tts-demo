@@ -5,7 +5,7 @@
 | 產品化環節 | 這個 repo 裡的證據 |
 |---|---|
 | 模型整合 | `src/engine.py` 把官方整句流程拆成五個可分開計時、可替換的階段；`src/streamer.py` 接上逐句串流與環形緩衝 |
-| 推論最佳化 | INT8 動態量化：逐步生成快 2.6～3.3 倍；逐層定位出聲碼器不能量化的輸出頭；換硬體加速器（CoreML）：固定輸入長度後快 3.3 倍，比較後不採用（見結果 5） |
+| 推論最佳化 | INT8 動態量化：逐步生成快 2.6～3.25 倍；消融實驗找出聲碼器的敏感層，採用混合精度（33 層卷積只留 3 層 FP32），記憶體再省 17%；換硬體加速器（CoreML）：固定輸入長度後快 3.3 倍，比較後不採用（見結果 5） |
 | 延遲與記憶體調校 | 首段延遲 2.45 → 0.90 s（逐句）；記憶體 495 → 353 MB；預填量、步數、執行緒的取捨；冷啟動 0.2 s；推論引擎記憶體設定再省 7% |
 | 嵌入式／雲端部署 | 雲端：`service/` 容器化串流 API＋排隊上限＋過載拒絕，壓測 1～24 人；嵌入式：只做到 CPU 配額模擬（見範圍說明） |
 | 發版品質把關 | `scripts/release_gate.py`＋GitHub Actions：錯字率、音色偏離、速度、記憶體、首段延遲、斷音，任一不過就擋下 |
@@ -96,7 +96,7 @@ PW=<playwright 模組路徑> node ui/record_demo.cjs   # 自動操作網頁並�
 | INT8 全部（含聲碼器）| 8 | **82%（壞掉）** | 1.771 | 0.144× | |
 | INT8 全部，聲碼器頭 1 層＋尾 3 層留 FP32 | 8 | 0% | 0.512 | 0.130× | |
 
-模型檔：逐步生成 244 MB → 62 MB；聲碼器 96 MB → 24 MB（但見踩坑 2）。
+模型檔：逐步生成 244 MB → 62 MB；聲碼器 96 MB → 24 MB（但見踩坑 2）；最後採用的混合精度聲碼器 36 MB（見發版關卡）。
 
 ＊峰值記憶體 11/18 量；11/19 同一台機器、同一支腳本、同套件版本重量一次是 FP32 558 MB、INT8 375 MB（`results/08_memory_1119.txt`）。絕對值差 10～15%，原因未查證；INT8 省的比例兩天一致（29%／33%）。見踩坑 10。
 
@@ -181,11 +181,14 @@ Mac 上實測（`results/gate/*.md`）：
 | 候選 | 結果 | 關鍵數字 |
 |---|---|---|
 | `int8_ve`（只量化逐步生成） | ✅ 准許發版 | 7 項全過，速度 3.25×，錯字率 0% |
+| **`int8_mixed`（逐步生成 INT8＋聲碼器混合精度，採用）** | ✅ 准許發版 | 7 項全過，速度 3.02×，錯字率 0%，峰值記憶體 296 MB（同一次量測 `int8_ve` 358 MB，**再少 17%**）；頻譜偏離 1.386（門檻 1.525）是 7 項裡最接近門檻的，列為觀察項 |
 | `int8_all`（連聲碼器一起量化） | ❌ 擋下 | 錯字率 82%（每句都被聽成 "Thank you."） |
 | `fp32_s2`（只用 2 步） | ❌ 擋下 | 錯字率 27%（"Turn left." → "Or at last."） |
 
 **兩個被擋下的版本都比較快、記憶體也比較少**——只看速度會選它們上線，是品質關卡把它們攔下來。
-GitHub Actions（`.github/workflows/release-gate.yml`）同時檢查兩件事：`int8_ve` 必須通過、`int8_all` **必須被擋下**——證明關卡不是永遠綠燈。
+GitHub Actions（`.github/workflows/release-gate.yml`）同時檢查三件事：`int8_ve` 與 `int8_mixed` 必須通過、`int8_all` **必須被擋下**——證明關卡不是永遠綠燈。
+
+`int8_mixed` 與 `int8_ve` 的比較用同一次量測（`results/gate/int8_mixed.md`、`results/gate/int8_ve_1126.md`）：速度相同（聲碼器只佔 3% 時間），省下的是記憶體。
 
 ## 雲端服務與壓測
 
@@ -236,7 +239,7 @@ GitHub Actions（`.github/workflows/release-gate.yml`）同時檢查兩件事：
    | 第 1 層＋最後 2 層 | 0% |
 
    敏感的是輸出頭。另外 `per_channel=True` 對這個聲碼器的動態量化輸出**完全沒變**（原因未查證）。
-   **決定：聲碼器維持 FP32。** 它只佔 3% 時間，量化省不了多少，風險卻最大。
+   ~~決定：聲碼器維持 FP32。~~ **決定（11/26 更新）：採用混合精度**——第 1 層＋最後 2 層留 FP32、其餘 30 層 INT8（`scripts/13_vocoder_mixed.py`）。已經找到品質不掉的組合就沒有理由不用：速度跟只量化逐步生成一樣（聲碼器只佔 3%），峰值記憶體再少 17%（358 → 296 MB），發版關卡 7 項全過。
 3. **錯字率計分本身會騙人。** 第一版把 whisper 寫的 `200`、`20%` 都算錯，FP32 基準就有 6% 錯字率；正規化數字後歸零。
 4. **步數有懸崖。** 8→4 步品質幾乎不變，4→2 步 WER 跳到 27%（"Turn left." 變 "Or at last."）。
 5. **預填量在逐句串流下幫助有限。** 寫入是一次一整句，所以 0.2 s 和 1.0 s 幾乎沒差（第一句一寫進來就超過門檻）；拉到 2.0 s 斷音次數減半，但首段延遲多 0.8 s。**真正解決斷音的是讓生成變快（INT8），不是加大緩衝。**
@@ -269,10 +272,11 @@ uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python -r requirements.txt
 .venv/bin/python scripts/04_quantize.py             # INT8
 .venv/bin/python scripts/05_quality.py              # WER / 頻譜差
 .venv/bin/python scripts/06_vocoder_sensitivity.py  # 聲碼器逐層定位
+.venv/bin/python scripts/13_vocoder_mixed.py        # 聲碼器混合精度（採用版本）
 docker build -t stts-bench docker && docker run --rm --cpus=1 -v "$PWD":/work stts-bench \
   python scripts/03_streaming_bench.py --threads 1 --steps 8 --policies sentence --prefills 0.2 1.0 2.0 --variant int8ve
 .venv/bin/python scripts/demo_live.py               # 真實播放＋水位顯示
-.venv/bin/python scripts/release_gate.py int8_ve    # 發版關卡（int8_all / fp32_s2 會被擋下）
+.venv/bin/python scripts/release_gate.py int8_mixed # 發版關卡（int8_ve 也會通過；int8_all / fp32_s2 會被擋下）
 docker build -f docker/Dockerfile.service -t stts-service . && bash scripts/run_loadtest.sh   # 雲端服務壓測
 .venv/bin/python scripts/10_runtime_options.py      # 冷啟動、記憶體設定
 .venv/bin/python scripts/11_coreml.py               # CoreML（長度不固定）

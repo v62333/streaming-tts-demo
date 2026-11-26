@@ -1,0 +1,75 @@
+{
+  "candidate": "int8_ve",
+  "config": {
+    "steps": 8,
+    "overrides": {
+      "vector_estimator": "models/int8/vector_estimator.int8.onnx"
+    }
+  },
+  "passed": true,
+  "checks": [
+    {
+      "item": "錄音辨識錯字率",
+      "value": 0.0,
+      "limit": "≤ 5.0",
+      "unit": "%",
+      "pass": true
+    },
+    {
+      "item": "錯字率比 baseline 增加",
+      "value": 0.0,
+      "limit": "≤ 2.0",
+      "unit": "pt",
+      "pass": true
+    },
+    {
+      "item": "頻譜偏離（vs baseline）",
+      "value": 0.433,
+      "limit": "≤ 1.525（自然變化量）",
+      "unit": "",
+      "pass": true
+    },
+    {
+      "item": "生成速度 RTF",
+      "value": 0.089,
+      "limit": "≤ 0.270（baseline）",
+      "unit": "×",
+      "pass": true
+    },
+    {
+      "item": "峰值記憶體",
+      "value": 358,
+      "limit": "≤ 574",
+      "unit": "MB",
+      "pass": true
+    },
+    {
+      "item": "串流首段延遲 p50",
+      "value": 0.284,
+      "limit": "≤ 0.796",
+      "unit": "s",
+      "pass": true
+    },
+    {
+      "item": "串流斷音",
+      "value": 0,
+      "limit": "≤ 0",
+      "unit": "次",
+      "pass": true
+    }
+  ],
+  "baseline": {
+    "wer_pct": 0.0,
+    "rtf": 0.27,
+    "peak_mb": 546,
+    "first_audio_p50_s": 0.724
+  },
+  "speedup_vs_baseline": 3.02,
+  "misheard": [],
+  "machine": {
+    "platform": "macOS-26.4-arm64-arm-64bit",
+    "python": "3.12.14",
+    "cpu_count": 10
+  },
+  "elapsed_s": 112.0
+}
